@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package rorm;
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "github.com/golang/protobuf/protoc-gen-go/descriptor/descriptor.proto";
+option go_package = "options";
+option (gogoproto.gogoproto_import) = true ;
+
+extend google.protobuf.ServiceOptions {
+    //1-sqlx  2-sqlt
+    int64   sqlType  = 44401 ;
+    // 1- redis 2-redisCluser
+    int64   redisType =44402 ;
+    bool    useUid = 44403 ;
+    bool   useNsq = 44404 ;
+    //
+    bool  ginHandler = 44406 ;
+    bool  grpcApiImp = 44407 ;
+}
+
+extend google.protobuf.MethodOptions {
+    RormOptions opts = 44401;
+    UidOptions uid = 44402;
+}
+
+message RormOptions {
+    string target = 1;
+    string method = 2;
+    string param = 3;
+    repeated TranOptions sqlx_tran = 4;
+    MzsetOptions mzset = 5;
+    RormOptions success = 7;
+    RormOptions failure = 8;
+}
+
+message MzsetOptions {
+    string target = 1;
+    string method = 2;
+    string key = 3;
+    string field = 5 ;
+    string value = 6 ;
+    string slice =7 ;
+}
+
+message TranOptions{
+    string target = 1;
+    string method = 2;
+    string param = 3 ;
+    string slice =4 ;
+}
+message UidOptions {
+    string name = 1;
+    string seed = 2 ;
+}
+
+message Variable {
+    string varName = 1;
+    string varType = 2;
+}

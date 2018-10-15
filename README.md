@@ -1,1 +1,1 @@
-# protoc-gen-rorm
+# protoc-gen-goauto
