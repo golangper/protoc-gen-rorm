@@ -12,16 +12,12 @@ import (
 
 type RormPlugin struct {
 	*generator.Generator
-	generator.PluginImports
-	redisPkg   generator.Single
-	dbEnginPkg generator.Single
-	uidPkg     generator.Single
-	nsqPkg     generator.Single
-	redisType  int64
-	sqlType    int64
-	useUid     bool
-	useNsq     bool
-	msgMap     map[string]*generator.Descriptor
+	imports   map[generator.GoPackageName]generator.GoImportPath
+	redisType int64
+	sqlType   int64
+	useUid    bool
+	useNsq    bool
+	msgMap    map[string]*generator.Descriptor
 }
 
 // Name identifies the plugin
@@ -31,13 +27,11 @@ func (p *RormPlugin) Name() string {
 
 func (p *RormPlugin) Init(g *generator.Generator) {
 	p.Generator = g
+	p.imports = make(map[generator.GoPackageName]generator.GoImportPath)
 }
 
 func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
-	p.PluginImports = generator.NewPluginImports(p.Generator)
-
-	p.NewImport("error")
-
+	p.imports["error"] = "error"
 	p.msgMap = make(map[string]*generator.Descriptor, len(file.Messages()))
 	for _, msg := range file.Messages() {
 		msgName := generator.CamelCase(msg.GetName())
@@ -47,6 +41,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 	for _, svc := range file.GetService() {
 		value, err := proto.GetExtension(svc.Options, options.E_RedisType)
 		if err != nil || value == nil {
+			//fmt.Println("===",err)
 			p.redisType = 0
 		} else {
 			p.redisType = *(value.(*int64))
@@ -59,41 +54,49 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.sqlType = *(value.(*int64))
 		}
 
-		if p.sqlType == 2 && p.dbEnginPkg == nil {
-			p.dbEnginPkg = p.NewImport("github.com/albertwidi/sqlt")
-		} else if p.sqlType == 1 && p.dbEnginPkg == nil {
-			p.dbEnginPkg = p.NewImport("github.com/jmoiron/sqlx")
+		if p.sqlType == 2 {
+			p.imports["sqlt"] = "github.com/albertwidi/sqlt"
+		} else if p.sqlType == 1 {
+			p.imports["sqlx"] = "github.com/jmoiron/sqlx"
 		} else {
-			fmt.Println("sqlType not set, if sqlType == 1 use 'github.com/jmoiron/sqlx',if sqlType == 2 use 'github.com/albertwidi/sqlt'")
+			fmt.Println("sqlType not set")
 			return
 		}
-		if p.redisType > 0 && p.redisPkg == nil {
-			p.redisPkg = p.NewImport("github.com/go-redis/redis")
-			p.NewImport("strconv")
+		if p.redisType > 0 {
+			p.imports["redis"] = "github.com/go-redis/redis"
+			//p.imports["strconv"] = "strconv"
 		}
 		p.useUid = proto.GetBoolExtension(svc.Options, options.E_UseUid, false)
+		// if err == nil {
+		// 	p.useUid = *(value.(*bool))
+		// }else {
+		// 	p.useUid = false
+		// }
 
-		if p.useUid && p.uidPkg == nil {
-			p.uidPkg = p.NewImport("github.com/fainted/snowflake")
+		if p.useUid {
+			p.imports["snowflake"] = "github.com/fainted/snowflake"
 		}
 
 		p.useNsq = proto.GetBoolExtension(svc.Options, options.E_UseNsq, false)
-		if p.useNsq && p.nsqPkg == nil {
-			p.uidPkg = p.NewImport("github.com/qgymje/nsqpool")
+
+		if p.useNsq {
+			p.imports["nsqpool"] = "github.com/qgymje/nsqpool"
 		}
 
 		gin := proto.GetBoolExtension(svc.Options, options.E_GinHandler, false)
+
 		if gin {
-			p.NewImport("github.com/gin-gonic/gin")
-			p.NewImport("github.com/gin-gonic/gin/binding")
-			p.NewImport("net/http")
+			p.imports["http"] = "net/http"
+			p.imports["gin"] = "github.com/gin-gonic/gin"
+			p.imports["binding"] = "github.com/gin-gonic/gin/binding"
+
 		}
-		p.NewImport("github.com/op/go-logging")
-		p.NewImport("golang.org/x/net/context")
+		p.imports["logging"] = "github.com/op/go-logging"
+		p.imports["context"] = "golang.org/x/net/context"
 		grpcSvcName := generator.CamelCase(svc.GetName()) + "GrpcImp"
 		impName := generator.CamelCase(svc.GetName()) + "Imp"
 		//grpc impl struct
-		p.P(`type `, grpcSvcName, `struct {`)
+		p.P(`type `, grpcSvcName, ` struct {`)
 		p.In()
 		if p.sqlType == 1 {
 			p.P(`Db *sqlx.Db`)
@@ -115,12 +118,12 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		//grpc method impl
 		for _, method := range svc.GetMethod() {
 			mname := generator.CamelCase(method.GetName())
-			inputType := generator.CamelCase(method.GetInputType())
-			outputType := generator.CamelCase(method.GetOutputType())
+
+			inputType := generator.CamelCase(strings.Split(method.GetInputType(), ".")[2])
+			outputType := generator.CamelCase(strings.Split(method.GetOutputType(), ".")[2])
 
 			uid := GetUidExtension(method.Options)
 			opts := GetOptsExtension(method.Options)
-
 			inputMsg, ok := p.msgMap[inputType]
 			if !ok {
 				fmt.Println("inputType: ", inputType, "not find")
@@ -135,10 +138,9 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 				}
 			}
 
-			p.P(`fun (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, inputType, `) (*`, outputType, `, error) {`)
+			p.P(`func (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, inputType, `) (*`, outputType, `, error) {`)
 			p.In()
 			p.P(`var err error`)
-			p.P(`var _ = err`)
 			p.outAndValid(inputType, outputType)
 			if uid != nil {
 				p.newUid(inputMsg, uid)
@@ -156,7 +158,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`}`)
 		}
 
-		p.P(`type `, impName, `struct {`)
+		p.P(`type `, impName, ` struct {`)
 		p.In()
 		p.P(grpcSvcName)
 		p.Out()
@@ -164,8 +166,8 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 
 		for _, m := range svc.GetMethod() {
 			mname := generator.CamelCase(m.GetName())
-			inputType := generator.CamelCase(m.GetInputType())
-			p.P(`fun (s *`, impName, `) `, mname, `Handler(c *gin.Context) {`)
+			inputType := generator.CamelCase(strings.Split(m.GetInputType(), ".")[2])
+			p.P(`func (s *`, impName, `) `, mname, `Handler(c *gin.Context) {`)
 			p.In()
 
 			p.P(`var prm *`, inputType)
@@ -175,7 +177,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`if err != nil {`)
 			p.In()
 			p.P(`s.Log.Error(err.Error())`)
-			p.P(`c.JSON(http.StatusBadRequest,gin.H{"resp": err.Error}`)
+			p.P(`c.JSON(http.StatusBadRequest,gin.H{"resp": err.Error()})`)
 			p.P(`return`)
 			p.Out()
 			p.P(`}`)
@@ -183,7 +185,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`if err = prm.Validate(); err != nil {`)
 			p.In()
 			p.P(`s.Log.Error(err.Error())`)
-			p.P(`c.JSON(http.StatusBadRequest,gin.H{"resp": err.Error}`)
+			p.P(`c.JSON(http.StatusBadRequest,gin.H{"resp": err.Error()})`)
 			p.P(`return`)
 			p.Out()
 			p.P(`}`)
@@ -192,14 +194,15 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`if err != nil {`)
 			p.In()
 			p.P(`s.Log.Error(err.Error())`)
-			p.P(`c.JSON(http.StatusServiceUnavailable,gin.H{"resp": err.Error}`)
+			p.P(`c.JSON(http.StatusServiceUnavailable,gin.H{"resp": err.Error()})`)
 			p.P(`return`)
 			p.Out()
 			p.P(`}`)
-			p.P(`c.JSON(http.StatusOK,gin.H{"resp": res}`)
+			p.P(`c.JSON(http.StatusOK,gin.H{"resp": res})`)
 			p.Out()
 			p.P(`}`)
 		}
+		// p.GenerateImports(file)
 	}
 }
 
@@ -207,7 +210,7 @@ func (p *RormPlugin) outAndValid(in, out string) {
 	if in == out {
 		p.P(`out := in`)
 	} else {
-		p.P(`out := &`, in, `{}`)
+		p.P(`out := &`, out, `{}`)
 	}
 	p.P(`err = in.Validate()`)
 	p.P(`if err != nil {`)
@@ -234,16 +237,12 @@ func (p *RormPlugin) newUid(msg *generator.Descriptor, uid *options.UidOptions) 
 	}
 }
 
-func (p *RormPlugin) dealMethods(opts []*options.RormOptions, in, out string) error {
-	if len(opts) == 0 {
-		return nil
+func (p *RormPlugin) dealMethods(opts *options.RormOptions, in, out string) error {
+	err := p.dealMethod(opts, false, false, in, out)
+	if err != nil {
+		return err
 	}
-	for _, o := range opts {
-		err := p.dealMethod(o, false, false, in, out)
-		if err != nil {
-			return err
-		}
-	}
+
 	return nil
 }
 
@@ -461,7 +460,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		}
 		t := strings.Split(CamelField(opt.GetTarget()), ".")
 		n := t[len(t)-1]
-		p.NewImport(`time`)
+		p.imports["time"] = "time"
 		if tp1 == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			p.P(`set`, n, `, err := `, CamelField(strArry[1]), `.Marshal()`)
 			p.dealErrReturn()
@@ -499,7 +498,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			return err
 		}
 		switch tp1 {
-		case descriptor.FieldDescriptorProto_TYPE_INT64,descriptor.FieldDescriptorProto_TYPE_INT32:
+		case descriptor.FieldDescriptorProto_TYPE_INT64, descriptor.FieldDescriptorProto_TYPE_INT32:
 			p.P(`err = s.Redis.IncrBy(`, key, `, int64(`, CamelField(strArry[1]), `)).Err()`)
 		case descriptor.FieldDescriptorProto_TYPE_DOUBLE, descriptor.FieldDescriptorProto_TYPE_FLOAT:
 			p.P(`err = s.Redis.IncrByFloat(`, key, `, float64(`, CamelField(strArry[1]), `)).Err()`)
@@ -520,10 +519,10 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			return err
 		}
 		switch tp1 {
-		case descriptor.FieldDescriptorProto_TYPE_INT64,descriptor.FieldDescriptorProto_TYPE_INT32:
+		case descriptor.FieldDescriptorProto_TYPE_INT64, descriptor.FieldDescriptorProto_TYPE_INT32:
 			p.P(`_dnum,  err := s.Redis.Get(`, key, `).Int64()`)
 			p.dealErrReturn()
-			p.P(`if int(_dnum) < int(`,CamelField(strArry[1]),`){`)
+			p.P(`if int(_dnum) < int(`, CamelField(strArry[1]), `){`)
 			p.In()
 			p.P(`return out, fmt.Errorf("Inventory shortage")`)
 			p.Out()
@@ -544,7 +543,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if err != nil {
 			return err
 		}
-		p.NewImport("time")
+		p.imports["time"] = "time"
 		p.P(`err = s.Redis.Expire(`, key, `, int64(time.Duration(`, strArry[1], `) * time.Second)).Err()`)
 		p.dealErrBool(opt, tp)
 	case "redis.HGet":
@@ -555,8 +554,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if err != nil {
 			return err
 		}
-		
-		field ,err := p.getString(strArry[1], in, out)
+
+		field, err := p.getString(strArry[1], in, out)
 		if err != nil {
 			return err
 		}
@@ -564,7 +563,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		n := t[len(t)-1]
 		switch tp {
 		case descriptor.FieldDescriptorProto_TYPE_MESSAGE:
-			p.P(`rds`, n, `, err := s.Redis.HGet(`, key,`,`,field, `).Bytes()`)
+			p.P(`rds`, n, `, err := s.Redis.HGet(`, key, `,`, field, `).Bytes()`)
 			if opt.Failure == nil {
 				p.dealErrReturn()
 			}
@@ -579,12 +578,12 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				p.dealErrReturn()
 			}
 		case descriptor.FieldDescriptorProto_TYPE_INT64:
-			p.P(CamelField(opt.GetTarget()), `, err := s.Redis.HGet(`, key,`,`,field, `).Int64()`)
+			p.P(CamelField(opt.GetTarget()), `, err := s.Redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
 				p.dealErrReturn()
 			}
 		case descriptor.FieldDescriptorProto_TYPE_UINT64, descriptor.FieldDescriptorProto_TYPE_FIXED64:
-			p.P(`rds`, n, `, err := s.Redis.HGet(`, key,`,`,field, `).Int64()`)
+			p.P(`rds`, n, `, err := s.Redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
 				p.dealErrReturn()
 				p.P(CamelField(opt.Target), ` = uint64(`, `rds`, n, `)`)
@@ -596,7 +595,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				p.P(`}`)
 			}
 		case descriptor.FieldDescriptorProto_TYPE_INT32:
-			p.P(`rds`, n, `, err := s.Redis.HGet(`, key,`,`,field, `).Int64()`)
+			p.P(`rds`, n, `, err := s.Redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
 				p.dealErrReturn()
 				p.P(CamelField(opt.Target), ` = int32(`, `rds`, n, `)`)
@@ -608,7 +607,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				p.P(`}`)
 			}
 		case descriptor.FieldDescriptorProto_TYPE_FIXED32:
-			p.P(`rds`, n, `, err := s.Redis.HGet(`, key,`,`,field, `).Int64()`)
+			p.P(`rds`, n, `, err := s.Redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
 				p.dealErrReturn()
 				p.P(CamelField(opt.Target), ` = uint32(`, `rds`, n, `)`)
@@ -620,12 +619,12 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				p.P(`}`)
 			}
 		case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
-			p.P(CamelField(opt.GetTarget()), `, err := s.Redis.HGet(`, key,`,`,field, `).Float64()`)
+			p.P(CamelField(opt.GetTarget()), `, err := s.Redis.HGet(`, key, `,`, field, `).Float64()`)
 			if opt.Failure == nil {
 				p.dealErrReturn()
 			}
 		case descriptor.FieldDescriptorProto_TYPE_FLOAT:
-			p.P(`rds`, n, `, err := s.Redis.HGet(`, key,`,`,field, `).Float64()`)
+			p.P(`rds`, n, `, err := s.Redis.HGet(`, key, `,`, field, `).Float64()`)
 			if opt.Failure == nil {
 				p.dealErrReturn()
 				p.P(CamelField(opt.Target), ` = float32(`, `rds`, n, `)`)
@@ -687,8 +686,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if err != nil {
 			return err
 		}
-		field , err := p.getString(strArry[1], in, out)
-		p.P(`err := s.Redis.HDel(`, key,`,`, field, `).Err()`)
+		field, err := p.getString(strArry[1], in, out)
+		p.P(`err := s.Redis.HDel(`, key, `,`, field, `).Err()`)
 		p.dealErrBool(opt, tp)
 	case "redis.HincrByX":
 		if len(strArry) < 3 {
@@ -698,7 +697,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if err != nil {
 			return err
 		}
-		field ,err := p.getString(strArry[1], in, out)
+		field, err := p.getString(strArry[1], in, out)
 		if err != nil {
 			return err
 		}
@@ -707,10 +706,10 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			return err
 		}
 		switch tp2 {
-		case descriptor.FieldDescriptorProto_TYPE_INT64,descriptor.FieldDescriptorProto_TYPE_INT32:
-			p.P(`err = s.Redis.HIncrBy(`, key,`,`,field, `, int64(`, CamelField(strArry[2]), `)).Err()`)
+		case descriptor.FieldDescriptorProto_TYPE_INT64, descriptor.FieldDescriptorProto_TYPE_INT32:
+			p.P(`err = s.Redis.HIncrBy(`, key, `,`, field, `, int64(`, CamelField(strArry[2]), `)).Err()`)
 		case descriptor.FieldDescriptorProto_TYPE_DOUBLE, descriptor.FieldDescriptorProto_TYPE_FLOAT:
-			p.P(`err = s.Redis.HIncrByFloat(`, key,`,`,field, `, float64(`, CamelField(strArry[2]), `)).Err()`)
+			p.P(`err = s.Redis.HIncrByFloat(`, key, `,`, field, `, float64(`, CamelField(strArry[2]), `)).Err()`)
 		default:
 			return fmt.Errorf("redis.HincrByX's The second param can be int32  int64 float32 float64")
 		}
@@ -727,15 +726,15 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if err != nil {
 			return err
 		}
-		if tp1 == descriptor.FieldDescriptorProto_TYPE_MESSAGE{
+		if tp1 == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			p.P(`pdc, err := (*s.Nsq).Get()`)
 			p.P(`defer pdc.Close()`)
 			p.dealErrReturn()
-			p.P( `_nsqData, err := `, CamelField(strArry[1]), `.Marshal()`)
+			p.P(`_nsqData, err := `, CamelField(strArry[1]), `.Marshal()`)
 			p.dealErrReturn()
-			p.P(`err = pdc.Publish(`,topic,` _nsqData)`)
+			p.P(`err = pdc.Publish(`, topic, ` _nsqData)`)
 			p.dealErrReturn()
-		}else {
+		} else {
 			return fmt.Errorf("nsq.Producer: the second param must be message ")
 		}
 	default:
@@ -756,7 +755,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				}
 				if o.Method == "sqlx.Exec" {
 					if lb1 == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-						p.P(`for _, obj := range `,CamelField(o.GetSlice()),`{`)
+						p.P(`for _, obj := range `, CamelField(o.GetSlice()), `{`)
 						p.In()
 						p.P(`_, err = s.Db.Exec(`, str1, str2, `)`)
 						p.P(`if err != nil {`)
@@ -768,8 +767,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 						p.P(`}`)
 						p.Out()
 						p.P(`}`)
-						
-					}else {
+
+					} else {
 						p.P(`_, err = s.Db.Exec(`, str1, str2, `)`)
 						p.P(`if err != nil {`)
 						p.In()
@@ -779,10 +778,10 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 						p.Out()
 						p.P(`}`)
 					}
-					
-				}else if o.Method == "sqlx.NExec"{
+
+				} else if o.Method == "sqlx.NExec" {
 					if lb1 == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-						p.P(`for _, obj := range `,CamelField(o.GetSlice()),`{`)
+						p.P(`for _, obj := range `, CamelField(o.GetSlice()), `{`)
 						p.In()
 						p.P(`_, err = s.Db.NamedExec(`, str1, str2, `)`)
 						p.P(`if err != nil {`)
@@ -794,8 +793,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 						p.P(`}`)
 						p.Out()
 						p.P(`}`)
-						
-					}else {
+
+					} else {
 						p.P(`_, err = s.Db.NamedExec(`, str1, str2, `)`)
 						p.P(`if err != nil {`)
 						p.In()
@@ -805,15 +804,15 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 						p.Out()
 						p.P(`}`)
 					}
-					
-				}else{
+
+				} else {
 					err = fmt.Errorf("Does not support functions: %s", opt.GetMethod())
 				}
-				
+
 			}
 			p.P(`tx.Commit()`)
 		} else if opt.GetMzset() != nil {
-			
+
 		} else {
 			err = fmt.Errorf("Does not support functions: %s", opt.GetMethod())
 		}
@@ -915,16 +914,19 @@ func (p *RormPlugin) getString(str, in, out string) (string, error) {
 				if res != "" {
 					res += " + "
 				}
+				p.imports["strconv"] = "strconv"
 				res += "strconv.Itoa(int(" + CamelField(st) + "))"
 			case descriptor.FieldDescriptorProto_TYPE_FLOAT:
 				if res != "" {
 					res += " + "
 				}
+				p.imports["strconv"] = "strconv"
 				res += "strconv.FormatFloat(" + CamelField(st) + ",'f',-1,32)"
 			case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
 				if res != "" {
 					res += " + "
 				}
+				p.imports["strconv"] = "strconv"
 				res += "strconv.FormatFloat(" + CamelField(st) + ",'f',-1,64)"
 			default:
 				return "", fmt.Errorf("field %s can not to string", st)

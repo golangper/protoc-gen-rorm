@@ -38,9 +38,11 @@ func CamelField(str string) string  {
 	for i, s := range vars {
 		if i==0 {
 			res += s
+		}else {
+			res += "."
+			res += generator.CamelCase(s)
 		}
-		res += "."
-		res += generator.CamelCase(s)
+		
 	}
 	return res
 }
@@ -68,3 +70,28 @@ func checkStrIsInt(str string) bool {
 	}
 	return b
 }
+
+var unneededImports = []string{
+	"import proto \"github.com/gogo/protobuf/proto\"\n",
+	"import _ \"github.com/golangper/protoc-gen-rorm/options\"\n",
+	// if needed will be imported with an alias
+	"var _ = proto.Marshal\n",
+	"var _ = fmt.Errorf\n",
+	"var _ = math.Inf\n",
+	"import fmt \"fmt\"\n",
+	"import math \"math\"\n",
+}
+
+// CleanImports removes extraneous imports and lines from a proto response
+// file Content
+func CleanImports(pFileText *string) *string {
+	if pFileText == nil {
+		return pFileText
+	}
+	fileText := *pFileText
+	for _, dep := range unneededImports {
+		fileText = strings.Replace(fileText, dep, "", -1)
+	}
+	return &fileText
+}
+

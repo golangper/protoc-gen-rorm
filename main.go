@@ -7,8 +7,8 @@ import (
 
 func main() {
   response := command.GeneratePlugin(command.Read(), &plugin.RormPlugin{}, ".service.go")
-  // for _, file := range response.GetFile() {
-  //   file.Content = plugin.CleanImports(file.Content)
-  // }
+  for _, file := range response.GetFile() {
+    file.Content = plugin.CleanImports(file.Content)
+  }
   command.Write(response)
 }
