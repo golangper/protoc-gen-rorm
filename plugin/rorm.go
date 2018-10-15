@@ -31,7 +31,6 @@ func (p *RormPlugin) Init(g *generator.Generator) {
 }
 
 func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
-	p.imports["error"] = "error"
 	p.msgMap = make(map[string]*generator.Descriptor, len(file.Messages()))
 	for _, msg := range file.Messages() {
 		msgName := generator.CamelCase(msg.GetName())

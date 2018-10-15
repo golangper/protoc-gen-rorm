@@ -3,13 +3,12 @@
 
 package prod
 
-import "github.com/op/go-logging"
-import "golang.org/x/net/context"
-import "error"
 import "github.com/jmoiron/sqlx"
 import "net/http"
 import "github.com/gin-gonic/gin"
 import "github.com/gin-gonic/gin/binding"
+import "github.com/op/go-logging"
+import "golang.org/x/net/context"
 
 // Reference imports to suppress errors if they are not otherwise used.
 
