@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"fmt"
+	// "fmt"
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 
@@ -12,7 +12,6 @@ import (
 func GetUidExtension(opt *descriptor.MethodOptions) *options.UidOptions {
 	val, err := proto.GetExtension(opt, options.E_Uid)
 	if err != nil {
-		// fmt.Println("GetUidExtension:", err.Error())
 		return nil
 	}
 	if val == nil {
@@ -24,7 +23,6 @@ func GetUidExtension(opt *descriptor.MethodOptions) *options.UidOptions {
 func GetOptsExtension(opt *descriptor.MethodOptions) *options.RormOptions {
 	val, err := proto.GetExtension(opt, options.E_Opts)
 	if err != nil {
-		fmt.Println("GetOptsExtension:", err.Error())
 		return nil
 	}
 	if val == nil {
@@ -32,5 +30,3 @@ func GetOptsExtension(opt *descriptor.MethodOptions) *options.RormOptions {
 	}
 	return val.(*options.RormOptions)
 }
-
-
