@@ -134,6 +134,8 @@ func (m *Sku) Validate() error {
 
 	// no validation rules for Weight
 
+	// no validation rules for ProdId
+
 	return nil
 }
 

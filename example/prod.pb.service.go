@@ -3,12 +3,12 @@
 
 package example
 
-import "github.com/gin-gonic/gin"
-import "github.com/gin-gonic/gin/binding"
-import "github.com/op/go-logging"
 import "golang.org/x/net/context"
 import "github.com/jmoiron/sqlx"
 import "net/http"
+import "github.com/gin-gonic/gin"
+import "github.com/gin-gonic/gin/binding"
+import "github.com/op/go-logging"
 
 // Reference imports to suppress errors if they are not otherwise used.
 
@@ -17,9 +17,9 @@ type _ProductImp struct {
 	log *logging.Logger
 }
 
-func (s *_ProductImp) GetProd(c context.Context, in *ProdId) (*Prod, error) {
+func (s *_ProductImp) GetProd(c context.Context, in *example.ProdId) (*example.Prod, error) {
 	var err error
-	out := &Prod{}
+	out := &example.Prod{}
 	err = in.Validate()
 	if err != nil {
 		return out, err
@@ -29,16 +29,48 @@ func (s *_ProductImp) GetProd(c context.Context, in *ProdId) (*Prod, error) {
 		s.log.Error(err.Error())
 		return out, err
 	}
+	err = s.db.Select(&out.Skus, "select * from sku where prod_id=?", in.Id)
+	if err != nil {
+		s.log.Error(err.Error())
+		return out, err
+	}
 	return out, nil
 }
 
-func (s *_ProductImp) SetProd(c context.Context, in *Prod) (*Empty, error) {
+func (s *_ProductImp) SetProd(c context.Context, in *example.Prod) (*example.empty, error) {
 	var err error
-	out := &Empty{}
+	out := &example.empty{}
 	err = in.Validate()
 	if err != nil {
 		return out, err
 	}
+	_s := in.Id % 256
+	_worker, err := snowflake.NewChannelWorker(s)
+	if err != nil {
+		return out, err
+	}
+	uid, _ := _worker.Next()
+	var _ = uid
+	tx, err := s.db.Beginx()
+	if err != nil {
+		s.log.Error(err.Error())
+		return out, err
+	}
+	_, err = s.db.Exec("insert into prod (id,name,details) values (?,?,?)", uid, in.Name, in.Details)
+	if err != nil {
+		tx.Rollback()
+		s.log.Error(err.Error())
+		return out, err
+	}
+	for _, obj := range in.Skus {
+		_, err = s.db.Exec("insert into sku (sku_id,price,bn,weight,prod_id) values (?,?,?,?,?)", obj.SkuId, obj.Price, obj.Bn, obj.Weight, in.Id)
+		if err != nil {
+			tx.Rollback()
+			s.log.Error(err.Error())
+			return out, err
+		}
+	}
+	tx.Commit()
 	return out, nil
 }
 
@@ -54,7 +86,7 @@ func NewProductImp(db *sqlx.DB, log *logging.Logger) ProductImp {
 }
 
 func (s *ProductImp) GetProdHandler(c *gin.Context) {
-	var prm *ProdId
+	var prm *example.ProdId
 	var err error
 	err = c.ShouldBindWith(prm, binding.JSON)
 	if err != nil {
@@ -77,7 +109,7 @@ func (s *ProductImp) GetProdHandler(c *gin.Context) {
 }
 
 func (s *ProductImp) SetProdHandler(c *gin.Context) {
-	var prm *Prod
+	var prm *example.Prod
 	var err error
 	err = c.ShouldBindWith(prm, binding.JSON)
 	if err != nil {

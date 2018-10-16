@@ -33,6 +33,7 @@ message RormOptions {
     MzsetOptions mzset = 5;
     RormOptions success = 7;
     RormOptions failure = 8;
+    string slice = 9;
 }
 
 message MzsetOptions {
@@ -41,7 +42,6 @@ message MzsetOptions {
     string key = 3;
     string field = 5 ;
     string value = 6 ;
-    string slice =7 ;
 }
 
 message TranOptions{

@@ -4,27 +4,31 @@ import (
 	"fmt"
 
 	// proto "github.com/gogo/protobuf/proto"
+	"strings"
+
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 	"github.com/golangper/protoc-gen-rorm/options"
-	"strings"
 )
 
 func CheckUidSeed(msg *generator.Descriptor, uid *options.UidOptions) error {
+	strs := strings.Split(uid.Seed, ".")
+	f := strs[len(strs)-1]
 	for _, field := range msg.Field {
-		if field.GetName() == uid.Seed && field.GetType() == descriptor.FieldDescriptorProto_TYPE_INT64  {
+		// fmt.Println(`=========`,field.GetName(),f,field.GetType())
+		if field.GetName() == f && field.GetType() == descriptor.FieldDescriptorProto_TYPE_INT64 {
 			return nil
 		}
 	}
 	return fmt.Errorf("input message must contain seed field and type must be int64 ")
 }
 
-func CamelField(str string) string  {
+func CamelField(str string) string {
 	str = strings.TrimSpace(str)
 	if str == "" {
 		return ""
 	}
-	if strings.Contains(str,`"`) {
+	if strings.Contains(str, `"`) {
 		return str
 	}
 	if checkStrIsNum(str) {
@@ -34,26 +38,26 @@ func CamelField(str string) string  {
 	if vars[0] != "in" && vars[0] != "out" && vars[0] != "obj" {
 		return str
 	}
-    res := ""
+	res := ""
 	for i, s := range vars {
-		if i==0 {
+		if i == 0 {
 			res += s
-		}else {
+		} else {
 			res += "."
 			res += generator.CamelCase(s)
 		}
-		
+
 	}
 	return res
 }
 
 func checkStrIsNum(str string) bool {
 	b := true
-	for i := 0 ; i<len(str) ; i++ {
+	for i := 0; i < len(str); i++ {
 		if str[i] < 48 || str[i] > 57 {
 			if str[i] == '.' {
 				b = true
-			}else {
+			} else {
 				b = false
 			}
 		}
@@ -63,7 +67,7 @@ func checkStrIsNum(str string) bool {
 
 func checkStrIsInt(str string) bool {
 	b := true
-	for i := 0 ; i<len(str) ; i++ {
+	for i := 0; i < len(str); i++ {
 		if str[i] < 48 || str[i] > 57 {
 			b = false
 		}
@@ -94,4 +98,3 @@ func CleanImports(pFileText *string) *string {
 	}
 	return &fileText
 }
-
