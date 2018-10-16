@@ -23,7 +23,6 @@ message empty{}
 service product {
     option (rorm.sql_type) = 1 ;
     option (rorm.gin_handler) = true ;
-    option (rorm.grpc_api_imp) = true ;
     rpc getProd(ProdId) returns (Prod){
         option (rorm.opts) = {
             target: "out";

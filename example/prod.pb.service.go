@@ -29,7 +29,9 @@ func (s *_ProductImp) GetProd(c context.Context, in *example.ProdId) (*example.P
 		s.log.Error(err.Error())
 		return out, err
 	}
-	err = s.db.Select(&out.Skus, "select * from sku where prod_id=?", in.Id)
+	for _, obj := range out {
+		err = s.db.Select(&obj.skus, "select * from sku where prod_id=?", in.Id)
+	}
 	if err != nil {
 		s.log.Error(err.Error())
 		return out, err
