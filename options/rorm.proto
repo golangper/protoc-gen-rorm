@@ -13,8 +13,6 @@ extend google.protobuf.ServiceOptions {
     int64   sql_type  = 44401 ;
     // 1- redis 2-redisCluser
     int64   redis_type =44402 ;
-    bool    use_uid = 44403 ;
-    bool   use_nsq = 44404 ;
     //
     bool  gin_handler = 44406 ;
     bool  grpc_api_imp = 44407 ;

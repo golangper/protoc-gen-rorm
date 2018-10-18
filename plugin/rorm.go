@@ -66,17 +66,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.imports["redis"] = "github.com/go-redis/redis"
 			//p.imports["strconv"] = "strconv"
 		}
-		p.useUid = proto.GetBoolExtension(svc.Options, options.E_UseUid, false)
-		// if err == nil {
-		// 	p.useUid = *(value.(*bool))
-		// }else {
-		// 	p.useUid = false
-		// }
-
-		if p.useUid {
-			p.imports["snowflake"] = "github.com/fainted/snowflake"
-		}
-
+	
 		p.useNsq = proto.GetBoolExtension(svc.Options, options.E_UseNsq, false)
 
 		if p.useNsq {
@@ -140,7 +130,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			// in := inputType[1:]
 			// out := outputType[1:]
 			p.P(``)
-			p.P(`func (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, GetMessageName(method.GetInputType()), `) (*`, GetMessageName(method.GetOutputType()), `, error) {`)
+			p.P(`func (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, generator.CamelCase(GetMessageName(method.GetInputType())), `) (*`, generator.CamelCase(GetMessageName(method.GetOutputType())), `, error) {`)
 			p.In()
 			p.P(`var err error`)
 			p.outAndValid(GetMessageName(method.GetInputType()), GetMessageName(method.GetOutputType()))
@@ -232,7 +222,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`func (s *`, impName, `) `, mname, `Handler(c *gin.Context) {`)
 			p.In()
 
-			p.P(`var prm *`, GetMessageName(m.GetInputType()))
+			p.P(`var prm *`, generator.CamelCase(GetMessageName(m.GetInputType())))
 			p.P(`var err error`)
 
 			p.P(`err = c.ShouldBindWith(prm, binding.JSON)`)
@@ -293,7 +283,7 @@ func (p *RormPlugin) outAndValid(in, out string) {
 	if in == out {
 		p.P(`out := in`)
 	} else {
-		p.P(`out := &`, out, `{}`)
+		p.P(`out := &`, generator.CamelCase(out), `{}`)
 	}
 	p.P(`err = in.Validate()`)
 	p.P(`if err != nil {`)
@@ -304,10 +294,11 @@ func (p *RormPlugin) outAndValid(in, out string) {
 }
 
 func (p *RormPlugin) newUid(uid *options.UidOptions) {
+	p.imports["snowflake"] = "github.com/fainted/snowflake"
 	strs := strings.Split(uid.Seed, ".")
 	f := strs[len(strs)-1]
 	p.P(`_s := in.`, generator.CamelCase(f), ` % 256`)
-	p.P(`_worker, err := snowflake.NewChannelWorker(s)`)
+	p.P(`_worker, err := snowflake.NewChannelWorker(_s)`)
 	p.P(`if err != nil {`)
 	p.In()
 	p.P("return out, err")
@@ -1135,6 +1126,9 @@ func (p *RormPlugin) getVarType(st string, in, out string) (descriptor.FieldDesc
 			if lb != descriptor.FieldDescriptorProto_LABEL_REPEATED {
 				sl = ""
 			}
+		}
+		if len(vars) < 3 {
+			sl = ""
 		}
 		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			if msg == nil {

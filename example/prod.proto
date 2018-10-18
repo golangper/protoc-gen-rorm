@@ -20,7 +20,7 @@ message Sku {
 message ProdId{
     int64 id =1;
 }
-message empty{}
+message Empty{}
 service product {
     option (rorm.sql_type) = 1 ;
     option (rorm.gin_handler) = true ;
@@ -40,7 +40,7 @@ service product {
             path: "\"/v1/prod/getProd\""
         };
     };
-    rpc setProd(Prod) returns(empty){
+    rpc setProd(Prod) returns(Empty){
         option (rorm.uid) = {
             name: "uid";
             seed: "in.id"

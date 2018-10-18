@@ -5,6 +5,7 @@ package example
 
 import "github.com/op/go-logging"
 import "golang.org/x/net/context"
+import "github.com/fainted/snowflake"
 import "github.com/jmoiron/sqlx"
 import "net/http"
 import "github.com/gin-gonic/gin"
@@ -29,9 +30,7 @@ func (s *_ProductImp) GetProd(c context.Context, in *ProdId) (*Prod, error) {
 		s.log.Error(err.Error())
 		return out, err
 	}
-	for _, obj := range out {
-		err = s.db.Select(&out.Skus, "select * from sku where prod_id=?", in.Id)
-	}
+	err = s.db.Select(&out.Skus, "select * from sku where prod_id=?", in.Id)
 	if err != nil {
 		s.log.Error(err.Error())
 		return out, err
@@ -39,15 +38,15 @@ func (s *_ProductImp) GetProd(c context.Context, in *ProdId) (*Prod, error) {
 	return out, nil
 }
 
-func (s *_ProductImp) SetProd(c context.Context, in *Prod) (*empty, error) {
+func (s *_ProductImp) SetProd(c context.Context, in *Prod) (*Empty, error) {
 	var err error
-	out := &empty{}
+	out := &Empty{}
 	err = in.Validate()
 	if err != nil {
 		return out, err
 	}
 	_s := in.Id % 256
-	_worker, err := snowflake.NewChannelWorker(s)
+	_worker, err := snowflake.NewChannelWorker(_s)
 	if err != nil {
 		return out, err
 	}
