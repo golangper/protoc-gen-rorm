@@ -3,12 +3,12 @@
 
 package example
 
+import "github.com/op/go-logging"
 import "golang.org/x/net/context"
 import "github.com/jmoiron/sqlx"
 import "net/http"
 import "github.com/gin-gonic/gin"
 import "github.com/gin-gonic/gin/binding"
-import "github.com/op/go-logging"
 
 // Reference imports to suppress errors if they are not otherwise used.
 
@@ -17,9 +17,9 @@ type _ProductImp struct {
 	log *logging.Logger
 }
 
-func (s *_ProductImp) GetProd(c context.Context, in *example.ProdId) (*example.Prod, error) {
+func (s *_ProductImp) GetProd(c context.Context, in *ProdId) (*Prod, error) {
 	var err error
-	out := &example.Prod{}
+	out := &Prod{}
 	err = in.Validate()
 	if err != nil {
 		return out, err
@@ -30,7 +30,7 @@ func (s *_ProductImp) GetProd(c context.Context, in *example.ProdId) (*example.P
 		return out, err
 	}
 	for _, obj := range out {
-		err = s.db.Select(&obj.skus, "select * from sku where prod_id=?", in.Id)
+		err = s.db.Select(&out.Skus, "select * from sku where prod_id=?", in.Id)
 	}
 	if err != nil {
 		s.log.Error(err.Error())
@@ -39,9 +39,9 @@ func (s *_ProductImp) GetProd(c context.Context, in *example.ProdId) (*example.P
 	return out, nil
 }
 
-func (s *_ProductImp) SetProd(c context.Context, in *example.Prod) (*example.empty, error) {
+func (s *_ProductImp) SetProd(c context.Context, in *Prod) (*empty, error) {
 	var err error
-	out := &example.empty{}
+	out := &empty{}
 	err = in.Validate()
 	if err != nil {
 		return out, err
@@ -87,8 +87,11 @@ func NewProductImp(db *sqlx.DB, log *logging.Logger) ProductImp {
 	return res
 }
 
+func (s *ProductImp) InitApi(g *gin.Engine) {
+}
+
 func (s *ProductImp) GetProdHandler(c *gin.Context) {
-	var prm *example.ProdId
+	var prm *ProdId
 	var err error
 	err = c.ShouldBindWith(prm, binding.JSON)
 	if err != nil {
@@ -111,7 +114,7 @@ func (s *ProductImp) GetProdHandler(c *gin.Context) {
 }
 
 func (s *ProductImp) SetProdHandler(c *gin.Context) {
-	var prm *example.Prod
+	var prm *Prod
 	var err error
 	err = c.ShouldBindWith(prm, binding.JSON)
 	if err != nil {
@@ -131,4 +134,8 @@ func (s *ProductImp) SetProdHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"resp": res})
+}
+
+func (s *ProductImp) InitApi(g *gin.Engine) {
+	g.GET("/v1/prod/getProd", s.GetProdHandler)
 }

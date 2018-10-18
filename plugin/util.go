@@ -11,7 +11,7 @@ import (
 	"github.com/golangper/protoc-gen-rorm/options"
 )
 
-func CheckUidSeed(msg *generator.Descriptor, uid *options.UidOptions) error {
+func CheckUidSeed(msg *descriptor.DescriptorProto, uid *options.UidOptions) error {
 	strs := strings.Split(uid.Seed, ".")
 	f := strs[len(strs)-1]
 	for _, field := range msg.Field {
@@ -97,4 +97,12 @@ func CleanImports(pFileText *string) *string {
 		fileText = strings.Replace(fileText, dep, "", -1)
 	}
 	return &fileText
+}
+
+func  GetMessageName(str string) string {
+	if str == "" {
+		return ""
+	}
+	s := strings.Split(str, ".")
+	return s[len(s) - 1]
 }

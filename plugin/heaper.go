@@ -20,6 +20,17 @@ func GetUidExtension(opt *descriptor.MethodOptions) *options.UidOptions {
 	return val.(*options.UidOptions)
 }
 
+func GetApiExtension(opt *descriptor.MethodOptions) *options.RormApi {
+	val, err := proto.GetExtension(opt, options.E_Api)
+	if err != nil {
+		return nil
+	}
+	if val == nil {
+		return nil
+	}
+	return val.(*options.RormApi)
+}
+
 func GetOptsExtension(opt *descriptor.MethodOptions) *options.RormOptions {
 	val, err := proto.GetExtension(opt, options.E_Opts)
 	if err != nil {

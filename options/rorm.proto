@@ -23,8 +23,12 @@ extend google.protobuf.ServiceOptions {
 extend google.protobuf.MethodOptions {
     RormOptions opts = 44401;
     UidOptions uid = 44402;
+    RormApi api = 44403;
 }
-
+message RormApi {
+    string method = 1;
+    string path = 2;
+}
 message RormOptions {
     string target = 1;
     string method = 2;

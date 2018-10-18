@@ -17,7 +17,13 @@ type RormPlugin struct {
 	sqlType   int64
 	useUid    bool
 	useNsq    bool
-	msgMap    map[string]*generator.Descriptor
+	file      *generator.FileDescriptor
+}
+
+type Api struct {
+	method   string
+	path     string
+	funcName string
 }
 
 // Name identifies the plugin
@@ -31,12 +37,7 @@ func (p *RormPlugin) Init(g *generator.Generator) {
 }
 
 func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
-	p.msgMap = make(map[string]*generator.Descriptor, len(file.Messages()))
-	for _, msg := range file.Messages() {
-		msgName := "." + file.GetPackage() + "." + generator.CamelCase(msg.GetName())
-		p.msgMap[msgName] = msg
-	}
-
+	p.file = file
 	for _, svc := range file.GetService() {
 		value, err := proto.GetExtension(svc.Options, options.E_RedisType)
 		if err != nil || value == nil {
@@ -114,21 +115,21 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.Out()
 		p.P(`}`)
 
+		apilist := make([]*Api, 0)
 		//grpc method impl
 		for _, method := range svc.GetMethod() {
 			mname := generator.CamelCase(method.GetName())
 
 			inputType := generator.CamelCase(method.GetInputType())
-			outputType := generator.CamelCase(method.GetOutputType())
+			//outputType := generator.CamelCase(method.GetOutputType())
 
 			uid := GetUidExtension(method.Options)
 			opts := GetOptsExtension(method.Options)
-			inputMsg, ok := p.msgMap[inputType]
-			if !ok {
+			inputMsg := p.file.GetMessage(GetMessageName(method.GetInputType()))
+			if inputMsg == nil {
 				fmt.Println("inputType: ", inputType, "not find")
 				return
 			}
-
 			if uid != nil {
 				err := CheckUidSeed(inputMsg, uid)
 				if err != nil {
@@ -136,23 +137,24 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 					return
 				}
 			}
-			in := inputType[1:]
-			out := outputType[1:]
+			// in := inputType[1:]
+			// out := outputType[1:]
 			p.P(``)
-			p.P(`func (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, in, `) (*`, out, `, error) {`)
+			p.P(`func (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, GetMessageName(method.GetInputType()), `) (*`, GetMessageName(method.GetOutputType()), `, error) {`)
 			p.In()
 			p.P(`var err error`)
-			p.outAndValid(inputType, outputType)
+			p.outAndValid(GetMessageName(method.GetInputType()), GetMessageName(method.GetOutputType()))
 			if uid != nil {
-				p.newUid(inputMsg, uid)
+				p.newUid(uid)
 			}
 			if opts != nil {
-				p.dealMethods(opts, inputType, outputType)
+				p.dealMethods(opts, GetMessageName(method.GetInputType()), GetMessageName(method.GetOutputType()))
 			}
 
 			p.P(`return out, nil`)
 			p.Out()
 			p.P(`}`)
+
 		}
 		p.P(``)
 		p.P(`type `, impName, ` struct {`)
@@ -211,15 +213,26 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.P(`return res`)
 		p.Out()
 		p.P(`}`)
+		p.P(``)
+		p.P(`func (s *`, impName, `) InitApi(g *gin.Engine) {`)
+		p.In()
 
+		p.Out()
+		p.P(`}`)
 		for _, m := range svc.GetMethod() {
 			mname := generator.CamelCase(m.GetName())
-			inputType := generator.CamelCase(m.GetInputType())
+			//inputType := generator.CamelCase(m.GetInputType())
+			api := GetApiExtension(m.Options)
+			if api != nil {
+				myapi := &Api{method: api.Method, path: api.Path, funcName: mname + "Handler"}
+				apilist = append(apilist, myapi)
+			}
+
 			p.P(``)
 			p.P(`func (s *`, impName, `) `, mname, `Handler(c *gin.Context) {`)
 			p.In()
 
-			p.P(`var prm *`, inputType[1:])
+			p.P(`var prm *`, GetMessageName(m.GetInputType()))
 			p.P(`var err error`)
 
 			p.P(`err = c.ShouldBindWith(prm, binding.JSON)`)
@@ -252,6 +265,27 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`}`)
 		}
 		// p.GenerateImports(file)
+		p.P(``)
+		p.P(`func (s *`, impName, `) InitApi(g *gin.Engine) {`)
+		p.In()
+		for _, l := range apilist {
+			if l.method == "post" || l.method == "Post" || l.method == "POST" {
+				p.P(`g.POST(`, l.path, `, s.`, l.funcName, `)`)
+			} else if l.method == "get" || l.method == "Get" || l.method == "GET" {
+				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
+			} else if l.method == "delete" || l.method == "Delete" || l.method == "DELETE" {
+				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
+			} else if l.method == "put" || l.method == "Put" || l.method == "PUT" {
+				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
+			} else if l.method == "patch" || l.method == "Patch" || l.method == "PATCH" {
+				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
+			} else {
+				fmt.Println("not not support the method", l.method)
+			}
+		}
+		p.Out()
+		p.P(`}`)
+
 	}
 }
 
@@ -259,7 +293,7 @@ func (p *RormPlugin) outAndValid(in, out string) {
 	if in == out {
 		p.P(`out := in`)
 	} else {
-		p.P(`out := &`, out[1:], `{}`)
+		p.P(`out := &`, out, `{}`)
 	}
 	p.P(`err = in.Validate()`)
 	p.P(`if err != nil {`)
@@ -269,7 +303,7 @@ func (p *RormPlugin) outAndValid(in, out string) {
 	p.P(`}`)
 }
 
-func (p *RormPlugin) newUid(msg *generator.Descriptor, uid *options.UidOptions) {
+func (p *RormPlugin) newUid(uid *options.UidOptions) {
 	strs := strings.Split(uid.Seed, ".")
 	f := strs[len(strs)-1]
 	p.P(`_s := in.`, generator.CamelCase(f), ` % 256`)
@@ -326,25 +360,25 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		}
 		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			if sl != "" {
-				p.P(`for _, obj := range `,CamelField(sl), `{`)
+				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				s := strings.Split(opt.GetTarget(),".")
-				p.P(`err = s.db.Get(obj.`, CamelField(s[len(s) -1]), ` , `, str1, str2, `)`)
+				//s := strings.Split(opt.GetTarget(), ".")
+				p.P(`err = s.db.Get(`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
 				p.Out()
 				p.P(`}`)
-			}else {
+			} else {
 				p.P(`err = s.db.Get(`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
 			}
-			
+
 		} else {
 			if sl != "" {
-				p.P(`for _, obj := range `,CamelField(sl), `{`)
+				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				s := strings.Split(opt.GetTarget(),".")
-				p.P(`err = s.db.Get(&obj.`, CamelField(s[len(s) -1]), ` , `, str1, str2, `)`)
+				//s := strings.Split(opt.GetTarget(), ".")
+				p.P(`err = s.db.Get( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
 				p.Out()
 				p.P(`}`)
-			}else {
+			} else {
 				p.P(`err = s.db.Get( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
 			}
 		}
@@ -356,16 +390,16 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			return fmt.Errorf("sqlx.Select's target must be repeated ")
 		}
 		if sl != "" {
-			p.P(`for _, obj := range `,CamelField(sl), `{`)
+			p.P(`for _, obj := range `, CamelField(sl), `{`)
 			p.In()
-			s := strings.Split(opt.GetTarget(),".")
-			p.P(`err = s.db.Select(&obj.`, CamelField(s[len(s) -1]), ` , `, str1, str2, `)`)
+			// s := strings.Split(opt.GetTarget(), ".")
+			p.P(`err = s.db.Select( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
 			p.Out()
 			p.P(`}`)
-		}else {
+		} else {
 			p.P(`err = s.db.Select( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
 		}
-		
+
 		if opt.Failure == nil {
 			p.dealErrReturn()
 		}
@@ -379,25 +413,23 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		p.dealErrReturn()
 		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			if sl != "" {
-				p.P(`for _, obj := range `,CamelField(sl), `{`)
+				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				s := strings.Split(opt.GetTarget(),".")
-				p.P(`err = stmt`, n, `.Get(obj.`, CamelField(s[len(s) -1]), str2, `)`)
+				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
 				p.Out()
 				p.P(`}`)
-			}else{
+			} else {
 				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
 			}
-			
+
 		} else {
 			if sl != "" {
-				p.P(`for _, obj := range `,CamelField(sl), `{`)
+				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				s := strings.Split(opt.GetTarget(),".")
-				p.P(`err = stmt`, n, `.Get(&obj.`, CamelField(s[len(s) -1]), str2, `)`)
+				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
 				p.Out()
 				p.P(`}`)
-			}else {
+			} else {
 				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
 			}
 		}
@@ -412,17 +444,16 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		n := t[len(t)-1]
 		p.P(`stmt`, n, `, err := s.db.Preparex(`, str1, `)`)
 		p.dealErrReturn()
-	    if sl != "" {
-			p.P(`for _, obj := range `,CamelField(sl), `{`)
+		if sl != "" {
+			p.P(`for _, obj := range `, CamelField(sl), `{`)
 			p.In()
-			s := strings.Split(opt.GetTarget(),".")
-			p.P(`err = stmt`, n, `.Select(&obj.`, CamelField(s[len(s) -1]), str2, `)`)
+			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
 			p.Out()
 			p.P(`}`)
-		}else {
+		} else {
 			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
 		}
-		
+
 		if opt.Failure == nil {
 			p.dealErrReturn()
 		}
@@ -442,25 +473,23 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		p.dealErrReturn()
 		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			if sl != "" {
-				p.P(`for _, obj := range `,CamelField(sl), `{`)
+				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				s := strings.Split(opt.GetTarget(),".")
-				p.P(`err = stmt`, n, `.Get(obj.`, CamelField(s[len(s) -1]), str2, `)`)
+				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
 				p.Out()
 				p.P(`}`)
-			}else{
+			} else {
 				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
 			}
-			
+
 		} else {
 			if sl != "" {
-				p.P(`for _, obj := range `,CamelField(sl), `{`)
+				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				s := strings.Split(opt.GetTarget(),".")
-				p.P(`err = stmt`, n, `.Get(&obj.`, CamelField(s[len(s) -1]), str2, `)`)
+				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
 				p.Out()
 				p.P(`}`)
-			}else {
+			} else {
 				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
 			}
 		}
@@ -476,16 +505,15 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		p.P(`stmt`, n, `, err := s.db.PrepareNamed(`, str1, `)`)
 		p.dealErrReturn()
 		if sl != "" {
-			p.P(`for _, obj := range `,CamelField(sl), `{`)
+			p.P(`for _, obj := range `, CamelField(sl), `{`)
 			p.In()
-			s := strings.Split(opt.GetTarget(),".")
-			p.P(`err = stmt`, n, `.Select(&obj.`, CamelField(s[len(s) -1]), str2, `)`)
+			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
 			p.Out()
 			p.P(`}`)
-		}else {
+		} else {
 			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
 		}
-		
+
 		if opt.Failure == nil {
 			p.dealErrReturn()
 		}
@@ -1020,17 +1048,17 @@ func (p *RormPlugin) getString(str, in, out string) (string, error) {
 			if vars[0] != "in" {
 				return "", fmt.Errorf("param %s is not valide", st)
 			}
-			msg := p.msgMap[in]
+			msg := p.file.GetMessage(in)
 			var tp descriptor.FieldDescriptorProto_Type
 			for _, f := range vars[1:] {
 				fd := msg.GetFieldDescriptor(strings.TrimSpace(f))
 				tp = fd.GetType()
 				if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
-					_, ok := p.msgMap[generator.CamelCase(fd.GetTypeName())]
-					if !ok {
+
+					if msg == nil {
 						return "", fmt.Errorf("can not find message %s in this file", fd.GetTypeName())
 					}
-					msg = p.msgMap[generator.CamelCase(fd.GetTypeName())]
+					msg = p.file.GetMessage(GetMessageName(fd.GetTypeName()))
 				}
 			}
 
@@ -1073,11 +1101,11 @@ func (p *RormPlugin) getVarType(st string, in, out string) (descriptor.FieldDesc
 		return 0, 0, "", nil
 	}
 	vars := strings.Split(st, ".")
-	var msg *generator.Descriptor
+	var msg *descriptor.DescriptorProto
 	if vars[0] == "in" {
-		msg = p.msgMap[in]
+		msg = p.file.GetMessage(in)
 	} else if vars[0] == "out" {
-		msg = p.msgMap[out]
+		msg = p.file.GetMessage(out)
 	} else {
 		return 0, 0, "", fmt.Errorf("target must start with  'in' or 'out' ")
 	}
@@ -1109,11 +1137,10 @@ func (p *RormPlugin) getVarType(st string, in, out string) (descriptor.FieldDesc
 			}
 		}
 		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
-			_, ok := p.msgMap[generator.CamelCase(fd.GetTypeName())]
-			if !ok {
+			if msg == nil {
 				return 0, 0, "", fmt.Errorf("can not find message %s in this file", fd.GetTypeName())
 			}
-			msg = p.msgMap[generator.CamelCase(fd.GetTypeName())]
+			msg = p.file.GetMessage(GetMessageName(fd.GetTypeName()))
 		}
 	}
 	return tp, lb, sl, nil
