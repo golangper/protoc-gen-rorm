@@ -204,11 +204,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.Out()
 		p.P(`}`)
 		p.P(``)
-		p.P(`func (s *`, impName, `) InitApi(g *gin.Engine) {`)
-		p.In()
-
-		p.Out()
-		p.P(`}`)
+	
 		for _, m := range svc.GetMethod() {
 			mname := generator.CamelCase(m.GetName())
 			//inputType := generator.CamelCase(m.GetInputType())

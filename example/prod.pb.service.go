@@ -86,9 +86,6 @@ func NewProductImp(db *sqlx.DB, log *logging.Logger) ProductImp {
 	return res
 }
 
-func (s *ProductImp) InitApi(g *gin.Engine) {
-}
-
 func (s *ProductImp) GetProdHandler(c *gin.Context) {
 	var prm *ProdId
 	var err error
