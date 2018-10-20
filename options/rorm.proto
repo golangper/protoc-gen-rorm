@@ -3,7 +3,7 @@ syntax = "proto3";
 package rorm;
 
 
- import "google/protobuf/descriptor.proto";
+ import "github.com/gogo/protobuf/protobuf/google/protobuf/descriptor.proto";
 // import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 option go_package = "options";
 // option (gogoproto.gogoproto_import) = true ;

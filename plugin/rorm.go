@@ -256,9 +256,9 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.In()
 		for _, l := range apilist {
 			if l.method == "post" || l.method == "POST" || l.method == "Post" {
-				p.P(`g.POST(`, l.path, `, s.`, l.funcName, `)`)
+				p.P(`g.POST("`, l.path, `", s.`, l.funcName, `)`)
 			} else if l.method == "get" || l.method == "GET" || l.method == "Get"{
-				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
+				p.P(`g.GET("`, l.path, `", s.`, l.funcName, `)`)
 			} else {
 				fmt.Println("not not support the method", l.method)
 			}

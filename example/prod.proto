@@ -11,7 +11,7 @@ message Prod {
 }
 
 message Sku {
-    int64 sku_id = 1;
+    int64 skuId = 1;
     float price = 2;
     string bn = 3;
     float weight = 4;
@@ -41,7 +41,7 @@ service product {
         };
         option (rorm.api) = {
             method: "get";
-            path: "'/v1/prod/getProd'"
+            path: "/v1/prod/getProd"
         };
     };
     rpc setProd(Prod) returns(Empty){
@@ -63,7 +63,7 @@ service product {
         };
          option (rorm.api) = {
             method: "post";
-            path: "'/v1/prod/setProd'"
+            path: "/v1/prod/setProd"
         };
     };
 }

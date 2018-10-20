@@ -3,13 +3,12 @@
 
 package example
 
-import "github.com/op/go-logging"
-import "golang.org/x/net/context"
 import "github.com/fainted/snowflake"
 import "github.com/jmoiron/sqlx"
 import "net/http"
 import "github.com/gin-gonic/gin"
-import "github.com/gin-gonic/gin/binding"
+import "github.com/op/go-logging"
+import "golang.org/x/net/context"
 
 // Reference imports to suppress errors if they are not otherwise used.
 
@@ -112,7 +111,7 @@ func (s *ProductImp) GetProdHandler(c *gin.Context) {
 func (s *ProductImp) SetProdHandler(c *gin.Context) {
 	var prm *Prod
 	var err error
-	err = c.ShouldBindWith(prm, binding.JSON)
+	err = c.ShouldBind(prm)
 	if err != nil {
 		s.log.Error(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"resp": err.Error()})
@@ -134,4 +133,5 @@ func (s *ProductImp) SetProdHandler(c *gin.Context) {
 
 func (s *ProductImp) InitApi(g *gin.Engine) {
 	g.GET("/v1/prod/getProd", s.GetProdHandler)
+	g.POST("/v1/prod/setProd", s.SetProdHandler)
 }

@@ -7,22 +7,22 @@ import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
 export interface Prod {
-  id: number;
-  name: string;
-  details: string;
-  skus: Sku[];
+  id?: number;
+  name?: string;
+  details?: string;
+  skus?: Sku[];
 }
 
 export interface Sku {
-  skuId: number;
-  price: number;
-  bn: string;
-  weight: number;
-  prodId: number;
+  skuId?: number;
+  price?: number;
+  bn?: string;
+  weight?: number;
+  prodId?: number;
 }
 
 export interface ProdId {
-  id: number;
+  id?: number;
 }
 
 const httpOptions = {

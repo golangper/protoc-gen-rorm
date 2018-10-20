@@ -98,7 +98,7 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 			}
 			lb := field.GetLabel()
 			fname := getFieldName(field.GetName())
-			str := fname + ": " + tp
+			str := fname + "?: " + tp
 			if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 				str += "[]"
 			}
@@ -156,9 +156,9 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 							fname := getFieldName(f.GetName())
 							w.p(`params.set('%s', '' + param.%s);`, fname, fname)
 						}
-						w.p(`return this.http.get<%s>(this.url + %s, {params: params})`, out, api.GetPath())
+						w.p(`return this.http.get<%s>(this.url + '%s', {params: params})`, out, api.GetPath())
 					} else {
-						w.p(`return this.http.get<%s>(this.url + %s)`, out, api.GetPath())
+						w.p(`return this.http.get<%s>(this.url + '%s')`, out, api.GetPath())
 					}
 
 					w.p(`  .pipe(`)
@@ -166,7 +166,7 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 					w.p(`  );`)
 
 				} else if api.GetMethod() == `post` || api.GetMethod() == `Post` || api.GetMethod() == `POST` {
-					w.p(`return this.http.post<%s>(this.url + %s, param, httpOptions)`, out, api.GetPath())
+					w.p(`return this.http.post<%s>(this.url + '%s', param, httpOptions)`, out, api.GetPath())
 					w.p(`  .pipe(`)
 					w.p(`    catchError(this.handleError)`)
 					w.p(`  );`)
