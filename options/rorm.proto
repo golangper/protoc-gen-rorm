@@ -14,14 +14,20 @@ extend google.protobuf.ServiceOptions {
     // 1- redis 2-redisCluser
     int64   redis_type =44402 ;
     //
+    bool  useNsq = 44403;
     bool  gin_handler = 44406 ;
     bool  grpc_api_imp = 44407 ;
+    ApiConfig api_cfg = 44408;
 }
 
 extend google.protobuf.MethodOptions {
     RormOptions opts = 44401;
     UidOptions uid = 44402;
     RormApi api = 44403;
+}
+message ApiConfig {
+    string url = 1;
+    string provide = 2;
 }
 message RormApi {
     string method = 1;

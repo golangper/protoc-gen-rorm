@@ -78,7 +78,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		if gin {
 			p.imports["http"] = "net/http"
 			p.imports["gin"] = "github.com/gin-gonic/gin"
-			p.imports["binding"] = "github.com/gin-gonic/gin/binding"
+			// p.imports["binding"] = "github.com/gin-gonic/gin/binding"
 
 		}
 		p.imports["logging"] = "github.com/op/go-logging"
@@ -221,7 +221,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`var prm *`, generator.CamelCase(GetMessageName(m.GetInputType())))
 			p.P(`var err error`)
 
-			p.P(`err = c.ShouldBindWith(prm, binding.JSON)`)
+			p.P(`err = c.ShouldBind(prm)`)
 			p.P(`if err != nil {`)
 			p.In()
 			p.P(`s.log.Error(err.Error())`)
@@ -255,15 +255,9 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.P(`func (s *`, impName, `) InitApi(g *gin.Engine) {`)
 		p.In()
 		for _, l := range apilist {
-			if l.method == "post" || l.method == "Post" || l.method == "POST" {
+			if l.method == "post" || l.method == "POST" || l.method == "Post" {
 				p.P(`g.POST(`, l.path, `, s.`, l.funcName, `)`)
-			} else if l.method == "get" || l.method == "Get" || l.method == "GET" {
-				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
-			} else if l.method == "delete" || l.method == "Delete" || l.method == "DELETE" {
-				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
-			} else if l.method == "put" || l.method == "Put" || l.method == "PUT" {
-				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
-			} else if l.method == "patch" || l.method == "Patch" || l.method == "PATCH" {
+			} else if l.method == "get" || l.method == "GET" || l.method == "Get"{
 				p.P(`g.GET(`, l.path, `, s.`, l.funcName, `)`)
 			} else {
 				fmt.Println("not not support the method", l.method)

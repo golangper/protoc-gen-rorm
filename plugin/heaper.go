@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	// "fmt"
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 
@@ -40,4 +39,15 @@ func GetOptsExtension(opt *descriptor.MethodOptions) *options.RormOptions {
 		return nil
 	}
 	return val.(*options.RormOptions)
+}
+
+func GetApiCfgExtension(opt *descriptor.ServiceOptions) *options.ApiConfig {
+	val, err := proto.GetExtension(opt, options.E_ApiCfg)
+	if err != nil {
+		return nil
+	}
+	if val == nil {
+		return nil
+	}
+	return val.(*options.ApiConfig)
 }

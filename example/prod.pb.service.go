@@ -89,7 +89,7 @@ func NewProductImp(db *sqlx.DB, log *logging.Logger) ProductImp {
 func (s *ProductImp) GetProdHandler(c *gin.Context) {
 	var prm *ProdId
 	var err error
-	err = c.ShouldBindWith(prm, binding.JSON)
+	err = c.ShouldBind(prm)
 	if err != nil {
 		s.log.Error(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"resp": err.Error()})

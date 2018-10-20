@@ -24,6 +24,10 @@ message Empty{}
 service product {
     option (rorm.sql_type) = 1 ;
     option (rorm.gin_handler) = true ;
+    option (rorm.api_cfg) = {
+        url: "https://myfoodie.com";
+        provide: "";
+    };
     rpc getProd(ProdId) returns (Prod){
         option (rorm.opts) = {
             target: "out";
@@ -37,7 +41,7 @@ service product {
         };
         option (rorm.api) = {
             method: "get";
-            path: "\"/v1/prod/getProd\""
+            path: "'/v1/prod/getProd'"
         };
     };
     rpc setProd(Prod) returns(Empty){
@@ -56,6 +60,10 @@ service product {
                 slice: "in.skus";
                 param: "'insert into sku (sku_id,price,bn,weight,prod_id) values (?,?,?,?,?)';obj.sku_id;obj.price;obj.bn;obj.weight;in.id"
             }]
+        };
+         option (rorm.api) = {
+            method: "post";
+            path: "'/v1/prod/setProd'"
         };
     };
 }
