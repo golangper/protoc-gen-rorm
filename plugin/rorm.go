@@ -79,7 +79,6 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.imports["http"] = "net/http"
 			p.imports["gin"] = "github.com/gin-gonic/gin"
 			// p.imports["binding"] = "github.com/gin-gonic/gin/binding"
-
 		}
 		p.imports["logging"] = "github.com/op/go-logging"
 		p.imports["context"] = "golang.org/x/net/context"
@@ -215,7 +214,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			}
 
 			p.P(``)
-			p.P(`func (s *`, impName, `) `, mname, `Handler(c *gin.Context) {`)
+			p.P(`func (s *`, impName, `) `, mname, `GinHandler(c *gin.Context) {`)
 			p.In()
 
 			p.P(`var prm *`, generator.CamelCase(GetMessageName(m.GetInputType())))

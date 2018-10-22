@@ -3,12 +3,12 @@
 
 package example
 
-import "github.com/fainted/snowflake"
-import "github.com/jmoiron/sqlx"
-import "net/http"
 import "github.com/gin-gonic/gin"
 import "github.com/op/go-logging"
 import "golang.org/x/net/context"
+import "github.com/fainted/snowflake"
+import "github.com/jmoiron/sqlx"
+import "net/http"
 
 // Reference imports to suppress errors if they are not otherwise used.
 
@@ -85,7 +85,7 @@ func NewProductImp(db *sqlx.DB, log *logging.Logger) ProductImp {
 	return res
 }
 
-func (s *ProductImp) GetProdHandler(c *gin.Context) {
+func (s *ProductImp) GetProdGinHandler(c *gin.Context) {
 	var prm *ProdId
 	var err error
 	err = c.ShouldBind(prm)
@@ -108,7 +108,7 @@ func (s *ProductImp) GetProdHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"resp": res})
 }
 
-func (s *ProductImp) SetProdHandler(c *gin.Context) {
+func (s *ProductImp) SetProdGinHandler(c *gin.Context) {
 	var prm *Prod
 	var err error
 	err = c.ShouldBind(prm)
