@@ -209,7 +209,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			//inputType := generator.CamelCase(m.GetInputType())
 			api := GetApiExtension(m.Options)
 			if api != nil {
-				myapi := &Api{method: api.Method, path: api.Path, funcName: mname + "Handler"}
+				myapi := &Api{method: api.Method, path: api.Path, funcName: mname + "GinHandler"}
 				apilist = append(apilist, myapi)
 			}
 
