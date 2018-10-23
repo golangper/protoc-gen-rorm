@@ -57,7 +57,7 @@ func gen(req *ppb.CodeGeneratorRequest) *ppb.CodeGeneratorResponse {
 		f := &ppb.CodeGeneratorResponse_File{}
 
 		fext := filepath.Ext(file.GetName())
-		fname := strings.TrimSuffix(file.GetName(), fext) + ".pb.service.ts"
+		fname := strings.TrimSuffix(file.GetName(), fext) + ".service.pb.ts"
 		f.Name = proto.String(fname)
 
 		b := &bytes.Buffer{}
