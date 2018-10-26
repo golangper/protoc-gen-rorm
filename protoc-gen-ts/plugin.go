@@ -182,7 +182,7 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 		w.p(`} else {`)
 		w.p("console.error(`${error.status}: ${error.error}`);")
 		w.p(`}`)
-		w.p(`return throwError('Something bad happened; please try again later.');`)
+		w.p(`return throwError('please try again later.');`)
 		w.p(`}`)
 		w.p(`}`)
 	}

@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-  response := command.GeneratePlugin(command.Read(), &plugin.RormPlugin{}, ".service.pb.go")
+  response := command.GeneratePlugin(command.Read(), &plugin.RormPlugin{}, ".pb.service.go")
   for _, file := range response.GetFile() {
     file.Content = plugin.CleanImports(file.Content)
   }

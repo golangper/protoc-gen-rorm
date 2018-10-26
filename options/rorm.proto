@@ -9,9 +9,9 @@ option go_package = "options";
 // option (gogoproto.gogoproto_import) = true ;
 
 extend google.protobuf.ServiceOptions {
-    //1-sqlx  2-sqlt
-    int64   sql_type  = 44401 ;
-    // 1- redis 2-redisCluser
+    //1-xormEngine  2-xormEngineGroup
+    int64   xorm_type  = 44401 ;
+    // 1- redis 2-redisCluster
     int64   redis_type =44402 ;
     //
     bool  useNsq = 44403;

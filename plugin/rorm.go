@@ -14,7 +14,7 @@ type RormPlugin struct {
 	*generator.Generator
 	imports   map[generator.GoPackageName]generator.GoImportPath
 	redisType int64
-	sqlType   int64
+	xormType   int64
 	useUid    bool
 	useNsq    bool
 	file      *generator.FileDescriptor
@@ -49,20 +49,15 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.redisType = *(value.(*int64))
 		}
 
-		value, err = proto.GetExtension(svc.Options, options.E_SqlType)
+		value, err = proto.GetExtension(svc.Options, options.E_XormType)
 		if err != nil || value == nil {
-			p.sqlType = 0
+			p.xormType = 0
 		} else {
-			p.sqlType = *(value.(*int64))
+			p.xormType = *(value.(*int64))
 		}
 
-		if p.sqlType == 2 {
-			p.imports["sqlt"] = "github.com/albertwidi/sqlt"
-		} else if p.sqlType == 1 {
-			p.imports["sqlx"] = "github.com/jmoiron/sqlx"
-		} else {
-			fmt.Println("sqlType not set")
-			return
+		if p.xormType >0 {
+			p.imports["xorm"] = "github.com/go-xorm/xorm"
 		}
 		if p.redisType > 0 {
 			p.imports["redis"] = "github.com/go-redis/redis"
@@ -89,10 +84,10 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		//grpc impl struct
 		p.P(`type `, grpcSvcName, ` struct {`)
 		p.In()
-		if p.sqlType == 1 {
-			p.P(`db *sqlx.DB`)
-		} else if p.sqlType == 2 {
-			p.P(`db *sqlt.DB`)
+		if p.xormType == 1 {
+			p.P(`db *xorm.Engine`)
+		} else if p.xormType == 2 {
+			p.P(`db *xorm.EngineGroup`)
 		}
 		if p.redisType == 1 {
 			p.P(`redis *redis.Client`)
@@ -155,16 +150,16 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.P(`}`)
 
 		prm := ""
-		if p.sqlType == 1 {
+		if p.xormType == 1 {
 			if prm != "" {
 				prm += ", "
 			}
-			prm += `db *sqlx.DB`
-		} else if p.sqlType == 2 {
+			prm += `db *xorm.Engine`
+		} else if p.xormType == 2 {
 			if prm != "" {
 				prm += ", "
 			}
-			prm += `db *sqlt.DB`
+			prm += `db *xorm.EngineGroup`
 		}
 		if p.redisType == 1 {
 			if prm != "" {
@@ -191,7 +186,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.P(`func New`, impName, `(`, prm, `) `, impName, ` {`)
 		p.In()
 		p.P(`res := `, impName, `{}`)
-		if p.sqlType > 0 {
+		if p.xormType > 0 {
 			p.P(`res.db = db`)
 		}
 		if p.redisType > 0 {
@@ -331,26 +326,26 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		return err
 	}
 	switch opt.GetMethod() {
-	case "sqlx.Exec":
+	case "xorm.Exec":
 		if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.Exec's target can not be repeated ")
+			return fmt.Errorf("xorm.Exec's target can not be repeated ")
 		}
 		p.P(`_, err = s.db.Exec(`, str1, str2, `)`)
 		p.dealErrBool(opt, tp)
-	case "sqlx.Get":
+	case "xorm.SQLGet":
 		if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.GetMessage's target can not be repeated ")
+			return fmt.Errorf("xorm.SQLGet's target can not be repeated ")
 		}
 		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			if sl != "" {
 				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
 				//s := strings.Split(opt.GetTarget(), ".")
-				p.P(`err = s.db.Get(`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
+				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(`,CamelField(opt.GetTarget()),`)`)
 				p.Out()
 				p.P(`}`)
 			} else {
-				p.P(`err = s.db.Get(`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
+				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(`,CamelField(opt.GetTarget()),`)`)
 			}
 
 		} else {
@@ -358,149 +353,33 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
 				//s := strings.Split(opt.GetTarget(), ".")
-				p.P(`err = s.db.Get( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
+				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(&`,CamelField(opt.GetTarget()),`)`)
 				p.Out()
 				p.P(`}`)
 			} else {
-				p.P(`err = s.db.Get( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
+				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(&`,CamelField(opt.GetTarget()),`)`)
 			}
 		}
 		if opt.Failure == nil {
 			p.dealErrReturn()
 		}
-	case "sqlx.Select":
+	case "xorm.SQLFind":
 		if lb != descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.Select's target must be repeated ")
+			return fmt.Errorf("xorm.SQLFind's target must be repeated ")
 		}
 		if sl != "" {
 			p.P(`for _, obj := range `, CamelField(sl), `{`)
 			p.In()
 			// s := strings.Split(opt.GetTarget(), ".")
-			p.P(`err = s.db.Select( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
+			p.P(`err = s.db.SQL(`,str1, str2, `).Find(&`,CamelField(opt.GetTarget()),`)`)
 			p.Out()
 			p.P(`}`)
 		} else {
-			p.P(`err = s.db.Select( &`, CamelField(opt.GetTarget()), ` , `, str1, str2, `)`)
-		}
-
-		if opt.Failure == nil {
-			p.dealErrReturn()
-		}
-	case "sqlx.PGet":
-		if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.PGetMessage's target can not be repeated ")
-		}
-		t := strings.Split(CamelField(opt.GetTarget()), ".")
-		n := t[len(t)-1]
-		p.P(`stmt`, n, `, err := s.db.Preparex(`, str1, `)`)
-		p.dealErrReturn()
-		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
-			if sl != "" {
-				p.P(`for _, obj := range `, CamelField(sl), `{`)
-				p.In()
-				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
-				p.Out()
-				p.P(`}`)
-			} else {
-				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
-			}
-
-		} else {
-			if sl != "" {
-				p.P(`for _, obj := range `, CamelField(sl), `{`)
-				p.In()
-				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
-				p.Out()
-				p.P(`}`)
-			} else {
-				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
-			}
+			p.P(`err = s.db.SQL(`,str1, str2, `).Find(&`,CamelField(opt.GetTarget()),`)`)
 		}
 		if opt.Failure == nil {
 			p.dealErrReturn()
 		}
-	case "sqlx.PSelect":
-		if lb != descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.PSelect's target must be repeated ")
-		}
-		t := strings.Split(CamelField(opt.GetTarget()), ".")
-		n := t[len(t)-1]
-		p.P(`stmt`, n, `, err := s.db.Preparex(`, str1, `)`)
-		p.dealErrReturn()
-		if sl != "" {
-			p.P(`for _, obj := range `, CamelField(sl), `{`)
-			p.In()
-			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
-			p.Out()
-			p.P(`}`)
-		} else {
-			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
-		}
-
-		if opt.Failure == nil {
-			p.dealErrReturn()
-		}
-	case "sqlx.NExec":
-		if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.NExec's target can not be repeated ")
-		}
-		p.P(`_, err = s.db.NamedExec(`, str1, str2, `)`)
-		p.dealErrBool(opt, tp)
-	case "sqlx.PNGet":
-		if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.PNGetMessage's target can not be repeated ")
-		}
-		t := strings.Split(CamelField(opt.GetTarget()), ".")
-		n := t[len(t)-1]
-		p.P(`stmt`, n, `, err := s.db.PrepareNamed(`, str1, `)`)
-		p.dealErrReturn()
-		if tp == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
-			if sl != "" {
-				p.P(`for _, obj := range `, CamelField(sl), `{`)
-				p.In()
-				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
-				p.Out()
-				p.P(`}`)
-			} else {
-				p.P(`err = stmt`, n, `.Get(`, CamelField(opt.GetTarget()), str2, `)`)
-			}
-
-		} else {
-			if sl != "" {
-				p.P(`for _, obj := range `, CamelField(sl), `{`)
-				p.In()
-				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
-				p.Out()
-				p.P(`}`)
-			} else {
-				p.P(`err = stmt`, n, `.Get(&`, CamelField(opt.GetTarget()), str2, `)`)
-			}
-		}
-		if opt.Failure == nil {
-			p.dealErrReturn()
-		}
-	case "sqlx.PNSelect":
-		if lb != descriptor.FieldDescriptorProto_LABEL_REPEATED {
-			return fmt.Errorf("sqlx.PNSelect's target must be repeated ")
-		}
-		t := strings.Split(CamelField(opt.GetTarget()), ".")
-		n := t[len(t)-1]
-		p.P(`stmt`, n, `, err := s.db.PrepareNamed(`, str1, `)`)
-		p.dealErrReturn()
-		if sl != "" {
-			p.P(`for _, obj := range `, CamelField(sl), `{`)
-			p.In()
-			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
-			p.Out()
-			p.P(`}`)
-		} else {
-			p.P(`err = stmt`, n, `.Select( &`, CamelField(opt.GetTarget()), str2, `)`)
-		}
-
-		if opt.Failure == nil {
-			p.dealErrReturn()
-		}
-
 	case "redis.Get":
 		key, err := p.getString(str1, in, out)
 		if err != nil {
@@ -882,7 +761,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		}
 	default:
 		if opt.GetSqlxTran() != nil && len(opt.GetSqlxTran()) > 0 {
-			p.P(`tx, err := s.db.Beginx()`)
+			p.P(`tx := s.db.NewSession()`)
+			p.P(`err := tx.Begin()`)
 			p.dealErrReturn()
 			for _, o := range opt.GetSqlxTran() {
 				str := strings.Replace(o.GetParam(), `'`, `"`, -1)
@@ -897,7 +777,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				if err != nil {
 					return err
 				}
-				if o.Method == "sqlx.Exec" {
+				if o.Method == "xorm.Exec" {
 					if lb1 == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 						p.P(`for _, obj := range `, CamelField(o.GetSlice()), `{`)
 						p.In()
@@ -923,33 +803,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 						p.P(`}`)
 					}
 
-				} else if o.Method == "sqlx.NExec" {
-					if lb1 == descriptor.FieldDescriptorProto_LABEL_REPEATED {
-						p.P(`for _, obj := range `, CamelField(o.GetSlice()), `{`)
-						p.In()
-						p.P(`_, err = s.db.NamedExec(`, str1, str2, `)`)
-						p.P(`if err != nil {`)
-						p.In()
-						p.P(`tx.Rollback()`)
-						p.P(`s.log.Error(err.Error())`)
-						p.P(`return out, err`)
-						p.Out()
-						p.P(`}`)
-						p.Out()
-						p.P(`}`)
-
-					} else {
-						p.P(`_, err = s.db.NamedExec(`, str1, str2, `)`)
-						p.P(`if err != nil {`)
-						p.In()
-						p.P(`tx.Rollback()`)
-						p.P(`s.log.Error(err.Error())`)
-						p.P(`return out, err`)
-						p.Out()
-						p.P(`}`)
-					}
-
-				} else {
+				}else {
 					err = fmt.Errorf("Does not support functions: %s", opt.GetMethod())
 				}
 			}

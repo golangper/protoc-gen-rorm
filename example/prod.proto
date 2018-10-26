@@ -22,7 +22,7 @@ message ProdId{
 }
 message Empty{}
 service product {
-    option (rorm.sql_type) = 1 ;
+    option (rorm.xorm_type) = 1 ;
     option (rorm.gin_handler) = true ;
     option (rorm.api_cfg) = {
         url: "https://myfoodie.com";
