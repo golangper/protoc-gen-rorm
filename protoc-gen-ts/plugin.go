@@ -174,14 +174,13 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 
 				w.p(`}`)
 			}
-
 		}
 		w.ln()
 		w.p(`private handleError(error: HttpErrorResponse) {`)
 		w.p(`if (error.error instanceof ErrorEvent) {`)
-		w.p(`console.error('An error occurred:', error.error.message);`)
+		w.p(`console.error(error.error.message);`)
 		w.p(`} else {`)
-		w.p("console.error(`Backend returned code ${error.status},body was: ${error.error}`);")
+		w.p("console.error(`${error.status}: ${error.error}`);")
 		w.p(`}`)
 		w.p(`return throwError('Something bad happened; please try again later.');`)
 		w.p(`}`)

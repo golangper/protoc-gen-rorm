@@ -38,6 +38,8 @@ func (p *RormPlugin) Init(g *generator.Generator) {
 
 func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 	p.file = file
+	p.imports["json"] = "encoding/json"
+	p.P(`var _ = json.Marshal`)
 	for _, svc := range file.GetService() {
 		value, err := proto.GetExtension(svc.Options, options.E_RedisType)
 		if err != nil || value == nil {
@@ -224,7 +226,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`if err != nil {`)
 			p.In()
 			p.P(`s.log.Error(err.Error())`)
-			p.P(`c.JSON(http.StatusBadRequest,gin.H{"resp": err.Error()})`)
+			p.P(`c.String(http.StatusBadRequest, err.Error())`)
 			p.P(`return`)
 			p.Out()
 			p.P(`}`)
@@ -232,7 +234,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`if err = prm.Validate(); err != nil {`)
 			p.In()
 			p.P(`s.log.Error(err.Error())`)
-			p.P(`c.JSON(http.StatusBadRequest,gin.H{"resp": err.Error()})`)
+			p.P(`c.String(http.StatusBadRequest, err.Error())`)
 			p.P(`return`)
 			p.Out()
 			p.P(`}`)
@@ -241,11 +243,12 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`if err != nil {`)
 			p.In()
 			p.P(`s.log.Error(err.Error())`)
-			p.P(`c.JSON(http.StatusServiceUnavailable,gin.H{"resp": err.Error()})`)
+			p.P(`c.String(http.StatusServiceUnavailable, err.Error())`)
 			p.P(`return`)
 			p.Out()
 			p.P(`}`)
-			p.P(`c.JSON(http.StatusOK,gin.H{"resp": res})`)
+			p.P(`r,_:=json.Marshal(res)`)
+			p.P(`c.String(http.StatusOK,string(r))`)
 			p.Out()
 			p.P(`}`)
 		}
