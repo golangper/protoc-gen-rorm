@@ -217,11 +217,8 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 
 			p.P(`prm := &`, generator.CamelCase(GetMessageName(m.GetInputType())),`{}`)
 			p.P(`var err error`)
-			if api.Method == "get" || api.Method == "GET" || api.Method == "Get" {
-				p.P(`err = c.ShouldBindQuery(prm)`)
-			} else {
-				p.P(`err = c.ShouldBind(prm)`)
-			}
+
+			p.P(`err = c.ShouldBind(prm)`)
 			p.P(`if err != nil {`)
 			p.In()
 			p.P(`s.log.Error(err.Error())`)
