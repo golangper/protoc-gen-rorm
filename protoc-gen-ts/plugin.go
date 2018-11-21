@@ -75,9 +75,9 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 	w.p("// Source: %s", file.GetName())
 	w.ln()
 	w.p(`import { Injectable } from '@angular/core';`)
-	w.p(`import { HttpClient, HttpParams, HttpHeaders, HttpErrorResponse } from '@angular/common/http';`)
-	w.p(`import { Observable, throwError } from 'rxjs';`)
-	w.p(`import { catchError } from 'rxjs/operators';`)
+	w.p(`import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';`)
+	w.p(`import { Observable } from 'rxjs';`)
+	// w.p(`import { catchError } from 'rxjs/operators';`)
 
 	// Messages, recurse.
 	for _, msg := range file.MessageType {
@@ -115,6 +115,7 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 	w.p(`};`)
 
 	for _, svc := range file.GetService() {
+		route := rorm.GetApiRouteExtension(svc.Options)
 		cfg := rorm.GetApiCfgExtension(svc.Options)
 		if cfg == nil || cfg.Url == "" {
 			fmt.Println("must config the api_cfg and url can not be null")
@@ -129,7 +130,7 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 			w.p(`@Injectable()`)
 		}
 		w.p(`export class %sService {`, generator.CamelCase(svc.GetName()))
-		w.p(`url = '%s';`, cfg.GetUrl())
+		w.p(`url = '%s';`, cfg.GetUrl() + route)
 		w.p(`constructor(private http: HttpClient) { }`)
 		for _, m := range svc.GetMethod() {
 			api := rorm.GetApiExtension(m.Options)
@@ -156,34 +157,30 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 							fname := getFieldName(f.GetName())
 							w.p(`params.set('%s', '' + param.%s);`, fname, fname)
 						}
-						w.p(`return this.http.get<%s>(this.url + '%s', {params: params})`, out, api.GetPath())
+						w.p(`return this.http.get<%s>(this.url + '%s', {params: params});`, out, api.GetPath())
 					} else {
-						w.p(`return this.http.get<%s>(this.url + '%s')`, out, api.GetPath())
+						w.p(`return this.http.get<%s>(this.url + '%s');`, out, api.GetPath())
 					}
 
-					w.p(`  .pipe(`)
-					w.p(`    catchError(this.handleError)`)
-					w.p(`  );`)
+					// w.p(`  .pipe(`)
+					// w.p(`    catchError(this.handleError)`)
+					// w.p(`  );`)
 
 				} else if api.GetMethod() == `post` || api.GetMethod() == `Post` || api.GetMethod() == `POST` {
-					w.p(`return this.http.post<%s>(this.url + '%s', param, httpOptions)`, out, api.GetPath())
-					w.p(`  .pipe(`)
-					w.p(`    catchError(this.handleError)`)
-					w.p(`  );`)
+					w.p(`return this.http.post<%s>(this.url + '%s', param, httpOptions);`, out, api.GetPath())
+					// w.p(`  .pipe(`)
+					// w.p(`    catchError(this.handleError)`)
+					// w.p(`  );`)
 				}
 
 				w.p(`}`)
 			}
 		}
 		w.ln()
-		w.p(`private handleError(error: HttpErrorResponse) {`)
-		w.p(`if (error.error instanceof ErrorEvent) {`)
-		w.p(`console.error(error.error.message);`)
-		w.p(`} else {`)
-		w.p("console.error(`${error.status}: ${error.error}`);")
-		w.p(`}`)
-		w.p(`return throwError('please try again later.');`)
-		w.p(`}`)
+		// w.p(`private handleError(error: HttpErrorResponse) {`)
+		// w.p(`console.log('ERROR! ', error);`)
+		// w.p(` return throwError('Something bad happened; please try again later.');`)
+		// w.p(`}`)
 		w.p(`}`)
 	}
 }

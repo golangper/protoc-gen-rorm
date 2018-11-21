@@ -51,3 +51,14 @@ func GetApiCfgExtension(opt *descriptor.ServiceOptions) *options.ApiConfig {
 	}
 	return val.(*options.ApiConfig)
 }
+
+func GetApiRouteExtension(opt *descriptor.ServiceOptions) string {
+	val, err := proto.GetExtension(opt, options.E_ApiRoute)
+	if err != nil {
+		return ""
+	}
+	if val == nil {
+		return ""
+	}
+	return *val.(*string)
+}

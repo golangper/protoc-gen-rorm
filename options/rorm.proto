@@ -12,12 +12,13 @@ extend google.protobuf.ServiceOptions {
     //1-xormEngine  2-xormEngineGroup
     int64   xorm_type  = 44401 ;
     // 1- redis 2-redisCluster
-    int64   redis_type =44402 ;
+    int64   redis_type = 44402 ;
     //
     bool  useNsq = 44403;
     bool  gin_handler = 44406 ;
     bool  grpc_api_imp = 44407 ;
     ApiConfig api_cfg = 44408;
+    string api_route = 44409;
 }
 
 extend google.protobuf.MethodOptions {

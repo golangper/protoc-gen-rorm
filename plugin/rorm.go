@@ -69,7 +69,8 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		if p.useNsq {
 			p.imports["nsqpool"] = "github.com/qgymje/nsqpool"
 		}
-
+		//route := GetApiRouteExtension(svc.Options)
+		
 		gin := proto.GetBoolExtension(svc.Options, options.E_GinHandler, false)
 
 		if gin {
@@ -214,10 +215,13 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`func (s *`, impName, `) `, mname, `GinHandler(c *gin.Context) {`)
 			p.In()
 
-			p.P(`var prm *`, generator.CamelCase(GetMessageName(m.GetInputType())))
+			p.P(`prm := &`, generator.CamelCase(GetMessageName(m.GetInputType())),`{}`)
 			p.P(`var err error`)
-
-			p.P(`err = c.ShouldBind(prm)`)
+			if api.Method == "get" || api.Method == "GET" || api.Method == "Get" {
+				p.P(`err = c.ShouldBindQuery(prm)`)
+			} else {
+				p.P(`err = c.ShouldBind(prm)`)
+			}
 			p.P(`if err != nil {`)
 			p.In()
 			p.P(`s.log.Error(err.Error())`)
@@ -249,7 +253,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		}
 		// p.GenerateImports(file)
 		p.P(``)
-		p.P(`func (s *`, impName, `) InitApi(g *gin.Engine) {`)
+		p.P(`func (s *`, impName, `) InitApi(g *gin.RouterGroup) {`)
 		p.In()
 		for _, l := range apilist {
 			if l.method == "post" || l.method == "POST" || l.method == "Post" {
@@ -340,8 +344,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			if sl != "" {
 				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				//s := strings.Split(opt.GetTarget(), ".")
-				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(`,CamelField(opt.GetTarget()),`)`)
+				s := strings.Split(CamelField(opt.GetTarget()), ".")
+				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(obj.`,s[len(s) - 1],`)`)
 				p.Out()
 				p.P(`}`)
 			} else {
@@ -352,8 +356,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			if sl != "" {
 				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
-				//s := strings.Split(opt.GetTarget(), ".")
-				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(&`,CamelField(opt.GetTarget()),`)`)
+				s := strings.Split(CamelField(opt.GetTarget()), ".")
+				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(&obj.`,s[len(s) - 1],`)`)
 				p.Out()
 				p.P(`}`)
 			} else {
@@ -370,8 +374,8 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if sl != "" {
 			p.P(`for _, obj := range `, CamelField(sl), `{`)
 			p.In()
-			// s := strings.Split(opt.GetTarget(), ".")
-			p.P(`err = s.db.SQL(`,str1, str2, `).Find(&`,CamelField(opt.GetTarget()),`)`)
+			s := strings.Split(CamelField(opt.GetTarget()), ".")
+			p.P(`err = s.db.SQL(`,str1, str2, `).Find(&obj.`,s[len(s) - 1],`)`)
 			p.Out()
 			p.P(`}`)
 		} else {
@@ -762,7 +766,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 	default:
 		if opt.GetSqlxTran() != nil && len(opt.GetSqlxTran()) > 0 {
 			p.P(`tx := s.db.NewSession()`)
-			p.P(`err := tx.Begin()`)
+			p.P(`err = tx.Begin()`)
 			p.dealErrReturn()
 			for _, o := range opt.GetSqlxTran() {
 				str := strings.Replace(o.GetParam(), `'`, `"`, -1)
