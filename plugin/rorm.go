@@ -12,12 +12,9 @@ import (
 
 type RormPlugin struct {
 	*generator.Generator
-	imports   map[generator.GoPackageName]generator.GoImportPath
-	redisType int64
-	xormType   int64
-	useUid    bool
-	useNsq    bool
-	file      *generator.FileDescriptor
+	imports map[generator.GoPackageName]generator.GoImportPath
+
+	file *generator.FileDescriptor
 }
 
 type Api struct {
@@ -40,65 +37,78 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 	p.file = file
 	p.imports["json"] = "encoding/json"
 	p.P(`var _ = json.Marshal`)
+	
 	for _, svc := range file.GetService() {
+		var redisType int64 = 0
+		var xormType int64 = 0
+		var useUid bool = false
+		var useNsq bool = false
+		var _ = useUid
 		value, err := proto.GetExtension(svc.Options, options.E_RedisType)
 		if err != nil || value == nil {
-			//fmt.Println("===",err)
-			p.redisType = 0
+			// fmt.Println("===", err)
+			redisType = 0
 		} else {
-			p.redisType = *(value.(*int64))
+			redisType = *(value.(*int64))
 		}
-
 		value, err = proto.GetExtension(svc.Options, options.E_XormType)
 		if err != nil || value == nil {
-			p.xormType = 0
+			xormType = 0
 		} else {
-			p.xormType = *(value.(*int64))
+			xormType = *(value.(*int64))
 		}
 
-		if p.xormType >0 {
+		if xormType > 0 {
 			p.imports["xorm"] = "github.com/go-xorm/xorm"
+		} else {
+			delete(p.imports, "xorm")
 		}
-		if p.redisType > 0 {
+		if redisType > 0 {
 			p.imports["redis"] = "github.com/go-redis/redis"
 			//p.imports["strconv"] = "strconv"
+		} else {
+			delete(p.imports, "redis")
 		}
-	
-		p.useNsq = proto.GetBoolExtension(svc.Options, options.E_UseNsq, false)
 
-		if p.useNsq {
+		useNsq = proto.GetBoolExtension(svc.Options, options.E_UseNsq, false)
+
+		if useNsq {
 			p.imports["nsqpool"] = "github.com/qgymje/nsqpool"
+		} else {
+			delete(p.imports, "nsqpool")
 		}
 		//route := GetApiRouteExtension(svc.Options)
-		
+
 		gin := proto.GetBoolExtension(svc.Options, options.E_GinHandler, false)
 
 		if gin {
 			p.imports["http"] = "net/http"
 			p.imports["gin"] = "github.com/gin-gonic/gin"
 			// p.imports["binding"] = "github.com/gin-gonic/gin/binding"
+		} else {
+			delete(p.imports, "http")
+			delete(p.imports, "gin")
 		}
-		p.imports["logging"] = "github.com/op/go-logging"
+		p.imports["log"] = "log"
 		p.imports["context"] = "golang.org/x/net/context"
 		grpcSvcName := "_" + generator.CamelCase(svc.GetName()) + "Imp"
 		impName := generator.CamelCase(svc.GetName()) + "Imp"
 		//grpc impl struct
 		p.P(`type `, grpcSvcName, ` struct {`)
 		p.In()
-		if p.xormType == 1 {
+		if xormType == 1 {
 			p.P(`db *xorm.Engine`)
-		} else if p.xormType == 2 {
+		} else if xormType == 2 {
 			p.P(`db *xorm.EngineGroup`)
 		}
-		if p.redisType == 1 {
+		if redisType == 1 {
 			p.P(`redis *redis.Client`)
-		} else if p.redisType == 2 {
+		} else if redisType == 2 {
 			p.P(`redis *redis.ClusterClient`)
 		}
-		if p.useNsq {
+		if useNsq {
 			p.P(`nsq *pool.Pool`)
 		}
-		p.P(`log *logging.Logger`)
 		p.Out()
 		p.P(`}`)
 
@@ -108,11 +118,13 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			mname := generator.CamelCase(method.GetName())
 
 			inputType := generator.CamelCase(method.GetInputType())
-			//outputType := generator.CamelCase(method.GetOutputType())
+			outputType := generator.CamelCase(method.GetOutputType())
 
 			uid := GetUidExtension(method.Options)
 			opts := GetOptsExtension(method.Options)
-			inputMsg := p.file.GetMessage(GetMessageName(method.GetInputType()))
+			strs := strings.Split(inputType, ".")
+			inputMsg := p.AllFiles().GetMessage(strs[1], strs[2])
+			//inputMsg := p.file.GetMessage(GetMessageName(method.GetInputType()))
 			if inputMsg == nil {
 				fmt.Println("inputType: ", inputType, "not find")
 				return
@@ -124,18 +136,30 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 					return
 				}
 			}
+			var in, out string
+			if file.GetPackage() == strs[1] {
+				in = generator.CamelCase(strs[2])
+			} else {
+				in = strs[1] + "." + generator.CamelCase(strs[2])
+			}
+			ots := strings.Split(outputType, ".")
+			if file.GetPackage() == ots[1] {
+				out = generator.CamelCase(ots[2])
+			} else {
+				out = ots[1] + "." + generator.CamelCase(ots[2])
+			}
 			// in := inputType[1:]
 			// out := outputType[1:]
 			p.P(``)
-			p.P(`func (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, generator.CamelCase(GetMessageName(method.GetInputType())), `) (*`, generator.CamelCase(GetMessageName(method.GetOutputType())), `, error) {`)
+			p.P(`func (s *`, grpcSvcName, `) `, mname, `(c context.Context, in *`, in, `) (*`, out, `, error) {`)
 			p.In()
 			p.P(`var err error`)
-			p.outAndValid(GetMessageName(method.GetInputType()), GetMessageName(method.GetOutputType()))
+			p.outAndValid(in, out)
 			if uid != nil {
 				p.newUid(uid)
 			}
 			if opts != nil {
-				p.dealMethods(opts, GetMessageName(method.GetInputType()), GetMessageName(method.GetOutputType()))
+				p.dealMethods(opts, GetMessageName(method.GetInputType()), GetMessageName(method.GetOutputType()),mname)
 			}
 
 			p.P(`return out, nil`)
@@ -151,29 +175,29 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		p.P(`}`)
 
 		prm := ""
-		if p.xormType == 1 {
+		if xormType == 1 {
 			if prm != "" {
 				prm += ", "
 			}
 			prm += `db *xorm.Engine`
-		} else if p.xormType == 2 {
+		} else if xormType == 2 {
 			if prm != "" {
 				prm += ", "
 			}
 			prm += `db *xorm.EngineGroup`
 		}
-		if p.redisType == 1 {
+		if redisType == 1 {
 			if prm != "" {
 				prm += ", "
 			}
 			prm += `redis *redis.Client`
-		} else if p.redisType == 2 {
+		} else if redisType == 2 {
 			if prm != "" {
 				prm += ", "
 			}
 			prm += `redis *redis.ClusterClient`
 		}
-		if p.useNsq {
+		if useNsq {
 			if prm != "" {
 				prm += ", "
 			}
@@ -182,26 +206,24 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		if prm != "" {
 			prm += ", "
 		}
-		prm += `log *logging.Logger`
 		p.P(``)
 		p.P(`func New`, impName, `(`, prm, `) `, impName, ` {`)
 		p.In()
 		p.P(`res := `, impName, `{}`)
-		if p.xormType > 0 {
+		if xormType > 0 {
 			p.P(`res.db = db`)
 		}
-		if p.redisType > 0 {
+		if redisType > 0 {
 			p.P(`res.redis = redis`)
 		}
-		if p.useNsq {
+		if useNsq {
 			p.P(`res.nsq = nsq`)
 		}
-		p.P(`res.log = log`)
 		p.P(`return res`)
 		p.Out()
 		p.P(`}`)
 		p.P(``)
-	
+
 		for _, m := range svc.GetMethod() {
 			mname := generator.CamelCase(m.GetName())
 			//inputType := generator.CamelCase(m.GetInputType())
@@ -210,35 +232,42 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 				myapi := &Api{method: api.Method, path: api.Path, funcName: mname + "GinHandler"}
 				apilist = append(apilist, myapi)
 			}
-
+			inputType := generator.CamelCase(m.GetInputType())
+			strs := strings.Split(inputType, ".")
+			var in string
+			if file.GetPackage() == strs[1] {
+				in = generator.CamelCase(strs[2])
+			} else {
+				in = strs[1] + "." + generator.CamelCase(strs[2])
+			}
 			p.P(``)
 			p.P(`func (s *`, impName, `) `, mname, `GinHandler(c *gin.Context) {`)
 			p.In()
 
-			p.P(`prm := &`, generator.CamelCase(GetMessageName(m.GetInputType())),`{}`)
+			p.P(`prm := &`, in, `{}`)
 			p.P(`var err error`)
 
 			p.P(`err = c.ShouldBind(prm)`)
 			p.P(`if err != nil {`)
 			p.In()
-			p.P(`s.log.Error(err.Error())`)
+			p.P(`log.Println("`,mname + "GinHandler[c.ShouldBind] :",`", err.Error())`)
 			p.P(`c.String(http.StatusBadRequest, err.Error())`)
 			p.P(`return`)
 			p.Out()
 			p.P(`}`)
 
-			p.P(`if err = prm.Validate(); err != nil {`)
-			p.In()
-			p.P(`s.log.Error(err.Error())`)
-			p.P(`c.String(http.StatusBadRequest, err.Error())`)
-			p.P(`return`)
-			p.Out()
-			p.P(`}`)
+			// p.P(`if err = prm.Validate(); err != nil {`)
+			// p.In()
+			// p.P(`log.Println("`,mname + "GinHandler[prm.Validate] :",`", err.Error())`)
+			// p.P(`c.String(http.StatusBadRequest, err.Error())`)
+			// p.P(`return`)
+			// p.Out()
+			// p.P(`}`)
 
 			p.P(`res, err := s.`, mname, `(context.Background(), prm)`)
 			p.P(`if err != nil {`)
 			p.In()
-			p.P(`s.log.Error(err.Error())`)
+			p.P(`log.Println("`,mname + "GinHandler[s."+mname+"] :",`", err.Error())`)
 			p.P(`c.String(http.StatusServiceUnavailable, err.Error())`)
 			p.P(`return`)
 			p.Out()
@@ -255,7 +284,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 		for _, l := range apilist {
 			if l.method == "post" || l.method == "POST" || l.method == "Post" {
 				p.P(`g.POST("`, l.path, `", s.`, l.funcName, `)`)
-			} else if l.method == "get" || l.method == "GET" || l.method == "Get"{
+			} else if l.method == "get" || l.method == "GET" || l.method == "Get" {
 				p.P(`g.GET("`, l.path, `", s.`, l.funcName, `)`)
 			} else {
 				fmt.Println("not not support the method", l.method)
@@ -271,7 +300,7 @@ func (p *RormPlugin) outAndValid(in, out string) {
 	if in == out {
 		p.P(`out := in`)
 	} else {
-		p.P(`out := &`, generator.CamelCase(out), `{}`)
+		p.P(`out := &`, out, `{}`)
 	}
 	p.P(`err = in.Validate()`)
 	p.P(`if err != nil {`)
@@ -296,15 +325,15 @@ func (p *RormPlugin) newUid(uid *options.UidOptions) {
 	p.P(`var _ = `, uid.Name)
 }
 
-func (p *RormPlugin) dealMethods(opts *options.RormOptions, in, out string) {
-	err := p.dealMethod(opts, false, false, in, out)
+func (p *RormPlugin) dealMethods(opts *options.RormOptions, in, out,mname string) {
+	err := p.dealMethod(opts, false, false, in, out,mname)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 	return
 }
 
-func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in, out string) error {
+func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in, out,mname string) error {
 	var err error
 	if opt.GetParam() == "" && opt.GetSqlxTran() == nil {
 		return fmt.Errorf("param can not bu null")
@@ -332,7 +361,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			return fmt.Errorf("xorm.Exec's target can not be repeated ")
 		}
 		p.P(`_, err = s.db.Exec(`, str1, str2, `)`)
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.db.Exec]")
 	case "xorm.SQLGet":
 		if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 			return fmt.Errorf("xorm.SQLGet's target can not be repeated ")
@@ -342,11 +371,11 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
 				s := strings.Split(CamelField(opt.GetTarget()), ".")
-				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(obj.`,s[len(s) - 1],`)`)
+				p.P(`_, err = s.db.SQL(`, str1, str2, `).Get(obj.`, s[len(s)-1], `)`)
 				p.Out()
 				p.P(`}`)
 			} else {
-				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(`,CamelField(opt.GetTarget()),`)`)
+				p.P(`_, err = s.db.SQL(`, str1, str2, `).Get(`, CamelField(opt.GetTarget()), `)`)
 			}
 
 		} else {
@@ -354,15 +383,15 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				p.P(`for _, obj := range `, CamelField(sl), `{`)
 				p.In()
 				s := strings.Split(CamelField(opt.GetTarget()), ".")
-				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(&obj.`,s[len(s) - 1],`)`)
+				p.P(`_, err = s.db.SQL(`, str1, str2, `).Get(&obj.`, s[len(s)-1], `)`)
 				p.Out()
 				p.P(`}`)
 			} else {
-				p.P(`_, err = s.db.SQL(`,str1, str2, `).Get(&`,CamelField(opt.GetTarget()),`)`)
+				p.P(`_, err = s.db.SQL(`, str1, str2, `).Get(&`, CamelField(opt.GetTarget()), `)`)
 			}
 		}
 		if opt.Failure == nil {
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[s.db.SQL-Get]:")
 		}
 	case "xorm.SQLFind":
 		if lb != descriptor.FieldDescriptorProto_LABEL_REPEATED {
@@ -372,14 +401,14 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			p.P(`for _, obj := range `, CamelField(sl), `{`)
 			p.In()
 			s := strings.Split(CamelField(opt.GetTarget()), ".")
-			p.P(`err = s.db.SQL(`,str1, str2, `).Find(&obj.`,s[len(s) - 1],`)`)
+			p.P(`err = s.db.SQL(`, str1, str2, `).Find(&obj.`, s[len(s)-1], `)`)
 			p.Out()
 			p.P(`}`)
 		} else {
-			p.P(`err = s.db.SQL(`,str1, str2, `).Find(&`,CamelField(opt.GetTarget()),`)`)
+			p.P(`err = s.db.SQL(`, str1, str2, `).Find(&`, CamelField(opt.GetTarget()), `)`)
 		}
 		if opt.Failure == nil {
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[s.db.SQL-Find]:")
 		}
 	case "redis.Get":
 		key, err := p.getString(str1, in, out)
@@ -392,27 +421,27 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_MESSAGE:
 			p.P(`rds`, n, `, err := s.redis.Get(`, key, `).Bytes()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 			}
 
 			p.P(`err = `, CamelField(opt.GetTarget()), `.Unmarshal(rds`, n, `)`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"["+CamelField(opt.GetTarget())+"Unmarshal]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_STRING:
 			p.P(CamelField(opt.GetTarget()), `, err := s.redis.Get(`, key, `).String()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_INT64:
 			p.P(CamelField(opt.Target), `, err := s.redis.Get(`, key, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_UINT64, descriptor.FieldDescriptorProto_TYPE_FIXED64:
 			p.P(`rds`, n, `, err := s.redis.Get(`, key, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 				p.P(CamelField(opt.Target), ` = uint64(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -424,7 +453,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_INT32:
 			p.P(`rds`, n, `, err := s.redis.Get(`, key, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 				p.P(CamelField(opt.Target), ` = int32(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -436,7 +465,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_FIXED32:
 			p.P(`rds`, n, `, err := s.redis.Get(`, key, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 				p.P(CamelField(opt.Target), ` = uint32(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -448,12 +477,12 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
 			p.P(CamelField(opt.Target), `, err := s.redis.Get(`, key, `).Float64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_FLOAT:
 			p.P(`rds`, n, `, err := s.redis.Get(`, key, `).Float64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.Get]:")
 				p.P(CamelField(opt.Target), ` = float32(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -486,14 +515,14 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		p.imports["time"] = "time"
 		if tp1 == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			p.P(`set`, n, `, err := `, CamelField(strArry[1]), `.Marshal()`)
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[Marshal]:")
 			p.P(`err = s.redis.Set(`, key, `,`, `set`, n, `,int64(time.Duration(`, strArry[2], `) * time.Second)).Err()`)
 		} else if tp1 == descriptor.FieldDescriptorProto_TYPE_BOOL {
 			return fmt.Errorf("redis.Set's target can not be bool ")
 		} else {
 			p.P(`err = s.redis.Set(`, key, `,`, CamelField(strArry[1]), `,int64(time.Duration(`, strArry[2], `) * time.Second)).Err()`)
 		}
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.Set]")
 	case "redis.Del":
 		param := ""
 		for _, st := range strArry {
@@ -507,7 +536,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			param += key
 		}
 		p.P(`err = s.redis.Del(`, param, `).Err()`)
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.Del]")
 	case "redis.IncrByX":
 		if len(strArry) < 2 {
 			return fmt.Errorf("redis.IncrByX's param must have 2 ")
@@ -528,7 +557,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		default:
 			return fmt.Errorf("redis.IncrByX's The second param can be int32  int64 float32 float64")
 		}
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.IncrBy|IncrByFloat|IncrByX]")
 	case "redis.DecrBy":
 		if len(strArry) < 2 {
 			return fmt.Errorf("redis.DecrBy's param must have 2 ")
@@ -544,7 +573,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		switch tp1 {
 		case descriptor.FieldDescriptorProto_TYPE_INT64, descriptor.FieldDescriptorProto_TYPE_INT32:
 			p.P(`_dnum,  err := s.redis.Get(`, key, `).Int64()`)
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[s.redis.Get]:")
 			p.P(`if int(_dnum) < int(`, CamelField(strArry[1]), `){`)
 			p.In()
 			p.P(`return out, fmt.Errorf("Inventory shortage")`)
@@ -554,7 +583,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		default:
 			return fmt.Errorf("redis.IncrByX's The second param can be int32  int64")
 		}
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.IncrBy]")
 	case "redis.Expire":
 		if len(strArry) < 2 {
 			return fmt.Errorf("redis.Expire's param must have 2 ")
@@ -568,7 +597,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		}
 		p.imports["time"] = "time"
 		p.P(`err = s.redis.Expire(`, key, `, int64(time.Duration(`, strArry[1], `) * time.Second)).Err()`)
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.Expire]")
 	case "redis.HGet":
 		if len(strArry) < 2 {
 			return fmt.Errorf("redis.HGet's param must have 2 ")
@@ -588,27 +617,27 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_MESSAGE:
 			p.P(`rds`, n, `, err := s.redis.HGet(`, key, `,`, field, `).Bytes()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 			}
 
 			p.P(`err = `, CamelField(opt.GetTarget()), `.Unmarshal(rds`, n, `)`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[Unmarshal]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_STRING:
 			p.P(CamelField(opt.GetTarget()), `, err := s.redis.HGet(`, key, `,`, field, `).String()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_INT64:
 			p.P(CamelField(opt.GetTarget()), `, err := s.redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_UINT64, descriptor.FieldDescriptorProto_TYPE_FIXED64:
 			p.P(`rds`, n, `, err := s.redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 				p.P(CamelField(opt.Target), ` = uint64(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -620,7 +649,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_INT32:
 			p.P(`rds`, n, `, err := s.redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 				p.P(CamelField(opt.Target), ` = int32(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -632,7 +661,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_FIXED32:
 			p.P(`rds`, n, `, err := s.redis.HGet(`, key, `,`, field, `).Int64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 				p.P(CamelField(opt.Target), ` = uint32(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -644,12 +673,12 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
 			p.P(CamelField(opt.GetTarget()), `, err := s.redis.HGet(`, key, `,`, field, `).Float64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 			}
 		case descriptor.FieldDescriptorProto_TYPE_FLOAT:
 			p.P(`rds`, n, `, err := s.redis.HGet(`, key, `,`, field, `).Float64()`)
 			if opt.Failure == nil {
-				p.dealErrReturn()
+				p.dealErrReturn(mname+"[s.redis.HGet]:")
 				p.P(CamelField(opt.Target), ` = float32(`, `rds`, n, `)`)
 			} else {
 				p.P(`if err == nil {`)
@@ -693,14 +722,14 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		n := t[len(t)-1]
 		if tp1 == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			p.P(`set`, n, `, err := `, CamelField(strArry[2]), `.Marshal()`)
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[Marshal]:")
 			p.P(`err = s.redis.HSet(`, key, `,`, field, `, set`, n, `).Err()`)
 		} else if tp1 == descriptor.FieldDescriptorProto_TYPE_BOOL {
 			return fmt.Errorf("redis.Set's target can not be bool ")
 		} else {
 			p.P(`err = s.redis.HSet(`, key, `,`, field, `,`, CamelField(strArry[2]), `).Err()`)
 		}
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.HSet]")
 	case "redis.HDel":
 		if len(strArry) < 2 {
 			return fmt.Errorf("redis.HDel's param must have 2 ")
@@ -711,7 +740,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		}
 		field, err := p.getString(strArry[1], in, out)
 		p.P(`err := s.redis.HDel(`, key, `,`, field, `).Err()`)
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.HDel]")
 	case "redis.HincrByX":
 		if len(strArry) < 3 {
 			return fmt.Errorf("redis.HincrByX's param must have 3 ")
@@ -736,7 +765,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		default:
 			return fmt.Errorf("redis.HincrByX's The second param can be int32  int64 float32 float64")
 		}
-		p.dealErrBool(opt, tp)
+		p.dealErrBool(opt, tp, mname + "[s.redis.HIncrBy|HIncrByFloat]")
 	case "nsq.Producer":
 		if len(strArry) < 2 {
 			return fmt.Errorf("nsq.Producer's param must have 3 ")
@@ -752,11 +781,11 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if tp1 == descriptor.FieldDescriptorProto_TYPE_MESSAGE {
 			p.P(`pdc, err := (*s.nsq).Get()`)
 			p.P(`defer pdc.Close()`)
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[(*s.nsq).Get()]:")
 			p.P(`_nsqData, err := `, CamelField(strArry[1]), `.Marshal()`)
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[Marshal]:")
 			p.P(`err = pdc.Publish(`, topic, ` _nsqData)`)
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[pdc.Publish]:")
 		} else {
 			return fmt.Errorf("nsq.Producer: the second param must be message ")
 		}
@@ -764,7 +793,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		if opt.GetSqlxTran() != nil && len(opt.GetSqlxTran()) > 0 {
 			p.P(`tx := s.db.NewSession()`)
 			p.P(`err = tx.Begin()`)
-			p.dealErrReturn()
+			p.dealErrReturn(mname+"[tx.Begin]:")
 			for _, o := range opt.GetSqlxTran() {
 				str := strings.Replace(o.GetParam(), `'`, `"`, -1)
 				strArry := strings.Split(str, ";")
@@ -786,7 +815,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 						p.P(`if err != nil {`)
 						p.In()
 						p.P(`tx.Rollback()`)
-						p.P(`s.log.Error(err.Error())`)
+						p.P(`log.Println("`,mname + "[s.db.Exec] :",`", err.Error())`)
 						p.P(`return out, err`)
 						p.Out()
 						p.P(`}`)
@@ -798,13 +827,13 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 						p.P(`if err != nil {`)
 						p.In()
 						p.P(`tx.Rollback()`)
-						p.P(`s.log.Error(err.Error())`)
+						p.P(`log.Println("`,mname + "[s.db.Exec] :",`", err.Error())`)
 						p.P(`return out, err`)
 						p.Out()
 						p.P(`}`)
 					}
 
-				}else {
+				} else {
 					err = fmt.Errorf("Does not support functions: %s", opt.GetMethod())
 				}
 			}
@@ -827,34 +856,34 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 	if opt.Success != nil && opt.Failure != nil {
 		p.P(`if err != nil {`)
 		p.In()
-		p.P(`s.log.Error(err.Error())`)
-		err = p.dealMethod(opt.Failure, true, true, in, out)
+		p.P(`log.Println("`,mname + "[...] :",`", err.Error())`)
+		err = p.dealMethod(opt.Failure, true, true, in, out,mname)
 		if err == nil {
-			err = p.dealMethod(opt.Success, true, false, in, out)
+			err = p.dealMethod(opt.Success, true, false, in, out,mname)
 		}
 	} else if opt.Failure != nil {
 		p.P(`if err != nil {`)
 		p.In()
-		p.P(`s.log.Error(err.Error())`)
-		err = p.dealMethod(opt.Failure, true, false, in, out)
+		p.P(`log.Println("`,mname + "[...] :",`", err.Error())`)
+		err = p.dealMethod(opt.Failure, true, false, in, out,mname)
 	} else if opt.Success != nil {
-		err = p.dealMethod(opt.Success, false, false, in, out)
+		err = p.dealMethod(opt.Success, false, false, in, out,mname)
 	}
 	return err
 }
-func (p *RormPlugin) dealErrReturn() {
+func (p *RormPlugin) dealErrReturn(mname string) {
 	p.P(`if err != nil {`)
 	p.In()
-	p.P(`s.log.Error(err.Error())`)
+	p.P(`log.Println("`,mname,`", err.Error())`)
 	p.P(`return out, err`)
 	p.Out()
 	p.P(`}`)
 }
-func (p *RormPlugin) dealErrBool(opt *options.RormOptions, tp descriptor.FieldDescriptorProto_Type) {
+func (p *RormPlugin) dealErrBool(opt *options.RormOptions, tp descriptor.FieldDescriptorProto_Type,mname string) {
 	if opt.Failure == nil {
 		p.P(`if err != nil {`)
 		p.In()
-		p.P(`s.log.Error(err.Error())`)
+		p.P(`log.Println("`,mname,`", err.Error())`)
 		p.P(`return out, err`)
 		p.Out()
 		p.P(`}`)

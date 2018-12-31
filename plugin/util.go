@@ -84,6 +84,8 @@ var unneededImports = []string{
 	"var _ = math.Inf\n",
 	"import fmt \"fmt\"\n",
 	"import math \"math\"\n",
+	"import _ \"github.com/lyft/protoc-gen-validate/validate\"\n",
+	"import proto \"github.com/golang/protobuf/proto\"\n",
 }
 
 // CleanImports removes extraneous imports and lines from a proto response
@@ -96,6 +98,7 @@ func CleanImports(pFileText *string) *string {
 	for _, dep := range unneededImports {
 		fileText = strings.Replace(fileText, dep, "", -1)
 	}
+	fileText = strings.Replace(fileText, "import _", "import", -1)
 	return &fileText
 }
 

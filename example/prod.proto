@@ -3,6 +3,8 @@ package example;
 
 import "github.com/golangper/protoc-gen-rorm/options/rorm.proto";
 // import "github.com/golangper/protoc-gen-rorm/example/user.proto";
+import "user.proto";
+
 message Prod {
     int64 id = 1;
     string name = 2;
