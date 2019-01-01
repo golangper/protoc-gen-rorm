@@ -229,7 +229,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			//inputType := generator.CamelCase(m.GetInputType())
 			api := GetApiExtension(m.Options)
 			if api != nil {
-				myapi := &Api{method: api.Method, path: api.Path, funcName: mname + "GinHandler"}
+				myapi := &Api{method: api.Method, path: api.Path, funcName: mname + "Handler"}
 				apilist = append(apilist, myapi)
 			}
 			inputType := generator.CamelCase(m.GetInputType())
@@ -241,7 +241,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 				in = strs[1] + "." + generator.CamelCase(strs[2])
 			}
 			p.P(``)
-			p.P(`func (s *`, impName, `) `, mname, `GinHandler(c *gin.Context) {`)
+			p.P(`func (s *`, impName, `) `, mname, `Handler(c *gin.Context) {`)
 			p.In()
 
 			p.P(`prm := &`, in, `{}`)
@@ -250,7 +250,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`err = c.ShouldBind(prm)`)
 			p.P(`if err != nil {`)
 			p.In()
-			p.P(`log.Println("`,mname + "GinHandler[c.ShouldBind] :",`", err.Error())`)
+			p.P(`log.Println("`,mname + "Handler[c.ShouldBind] :",`", err.Error())`)
 			p.P(`c.String(http.StatusBadRequest, err.Error())`)
 			p.P(`return`)
 			p.Out()
@@ -258,7 +258,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 
 			// p.P(`if err = prm.Validate(); err != nil {`)
 			// p.In()
-			// p.P(`log.Println("`,mname + "GinHandler[prm.Validate] :",`", err.Error())`)
+			// p.P(`log.Println("`,mname + "Handler[prm.Validate] :",`", err.Error())`)
 			// p.P(`c.String(http.StatusBadRequest, err.Error())`)
 			// p.P(`return`)
 			// p.Out()
@@ -267,7 +267,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 			p.P(`res, err := s.`, mname, `(context.Background(), prm)`)
 			p.P(`if err != nil {`)
 			p.In()
-			p.P(`log.Println("`,mname + "GinHandler[s."+mname+"] :",`", err.Error())`)
+			p.P(`log.Println("`,mname + "Handler[s."+mname+"] :",`", err.Error())`)
 			p.P(`c.String(http.StatusServiceUnavailable, err.Error())`)
 			p.P(`return`)
 			p.Out()
@@ -361,7 +361,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			return fmt.Errorf("xorm.Exec's target can not be repeated ")
 		}
 		p.P(`_, err = s.db.Exec(`, str1, str2, `)`)
-		p.dealErrBool(opt, tp, mname + "[s.db.Exec]")
+		p.dealErrBool(opt, tp, mname + "[s.db.Exec]:")
 	case "xorm.SQLGet":
 		if lb == descriptor.FieldDescriptorProto_LABEL_REPEATED {
 			return fmt.Errorf("xorm.SQLGet's target can not be repeated ")
