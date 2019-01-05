@@ -57,7 +57,7 @@ func gen(req *ppb.CodeGeneratorRequest) *ppb.CodeGeneratorResponse {
 		f := &ppb.CodeGeneratorResponse_File{}
 
 		fext := filepath.Ext(file.GetName())
-		fname := strings.TrimSuffix(file.GetName(), fext) + ".service.pb.ts"
+		fname := strings.TrimSuffix(file.GetName(), fext) + ".pb.service.ts"
 		f.Name = proto.String(fname)
 
 		b := &bytes.Buffer{}
@@ -78,13 +78,22 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 	w.p(`import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';`)
 	w.p(`import { Observable } from 'rxjs';`)
 	// w.p(`import { catchError } from 'rxjs/operators';`)
-
+	for _, f := range file.Dependency {
+		if f != "github.com/golangper/protoc-gen-rorm/options/rorm.proto" && f != "github.com/lyft/protoc-gen-validate/validate/validate.proto" {
+			strs := strings.Split(f, "/")
+			nm := strs[len(strs)-1]
+			hd := strings.Replace(nm, ".proto", "", -1)
+			nm = hd + ".pb.service"
+			w.p(`import * as `, hd ,` from '`,hd,`';`)
+		}
+	}
 	// Messages, recurse.
 	for _, msg := range file.MessageType {
 		if len(msg.Field) == 0 {
 			continue
 		}
 		w.ln()
+		w.p(`// tslint:disable-next-line:no-empty-interface`)
 		w.p(`export interface %s {`, generator.CamelCase(msg.GetName()))
 		for _, field := range msg.GetField() {
 			tp := getTsFieldType(field.GetType())
@@ -136,9 +145,23 @@ func writeFile(w *writer, file *descriptor.FileDescriptorProto) {
 			api := rorm.GetApiExtension(m.Options)
 			if api != nil {
 				mname := m.GetName()
-				in := generator.CamelCase(rorm.GetMessageName(m.GetInputType()))
-				out := generator.CamelCase(rorm.GetMessageName(m.GetOutputType()))
-				msg := file.GetMessage(rorm.GetMessageName(m.GetInputType()))
+				inputType := generator.CamelCase(m.GetInputType())
+				strs := strings.Split(inputType, ".")
+				var in, out string
+				if file.GetPackage() == strs[1] {
+					in = generator.CamelCase(strs[2])
+				} else {
+					in = strs[1] + "." + generator.CamelCase(strs[2])
+				}
+				outputType := generator.CamelCase(m.GetOutputType())
+				ot := strings.Split(outputType, ".")
+				if file.GetPackage() == ot[1] {
+					in = generator.CamelCase(ot[2])
+				} else {
+					in = ot[1] + "." + generator.CamelCase(ot[2])
+				}
+				msg := p.AllFiles().GetMessage(strs[1], strs[2])
+				
 				outmsg := file.GetMessage(rorm.GetMessageName(m.GetOutputType()))
 				if len(outmsg.Field) == 0 {
 					out = "{}"

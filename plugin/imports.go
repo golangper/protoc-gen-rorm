@@ -10,3 +10,7 @@ func (p *RormPlugin) GenerateImports(file *generator.FileDescriptor) {
 		p.PrintImport(pkg, m)
 	}
 }
+
+func (p *TsPlugin) GenerateImports(file *generator.FileDescriptor) {
+	
+}

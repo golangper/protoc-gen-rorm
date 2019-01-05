@@ -101,7 +101,19 @@ func CleanImports(pFileText *string) *string {
 	fileText = strings.Replace(fileText, "import _", "import", -1)
 	return &fileText
 }
-
+func CleanImportsTs(pFileText *string) *string {
+	if pFileText == nil {
+		return pFileText
+	}
+	fileText := *pFileText
+	for _, dep := range unneededImports {
+		fileText = strings.Replace(fileText, dep, "", -1)
+	}
+	fileText = strings.Replace(fileText, "import _", "// import _", -1)
+	fileText = strings.Replace(fileText, "package", "// package", -1)
+	fileText = strings.Replace(fileText, "	", "  ", -1)
+	return &fileText
+}
 func  GetMessageName(str string) string {
 	if str == "" {
 		return ""

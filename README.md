@@ -1,2 +1,2 @@
 # protoc-gen-rorm
-sqlx redis nsq.producer
+xorm redis nsq.producer
