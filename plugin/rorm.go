@@ -37,7 +37,7 @@ func (p *RormPlugin) Generate(file *generator.FileDescriptor) {
 	p.file = file
 	p.imports["json"] = "encoding/json"
 	p.P(`var _ = json.Marshal`)
-
+	p.imports["grpc"] = "google.golang.org/grpc"
 	for _, svc := range file.GetService() {
 		var redisType int64 = 0
 		var xormType int64 = 0

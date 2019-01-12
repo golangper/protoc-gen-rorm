@@ -92,7 +92,9 @@ func (p *TsPlugin) Generate(file *generator.FileDescriptor) {
 		
 		if cfg != nil && cfg.Provide != "" {
 			p.P(`@Injectable({`)
-			p.P(`providedIn: '%s'`, cfg.Provide)
+			p.In()
+			p.P(`providedIn: '`, cfg.Provide,`'`)
+			p.Out()
 			p.P(`})`)
 		} else {
 			p.P(`@Injectable()`)
