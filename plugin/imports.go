@@ -1,7 +1,6 @@
 package plugin
 
 import (
-
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 )
 
@@ -12,5 +11,5 @@ func (p *RormPlugin) GenerateImports(file *generator.FileDescriptor) {
 }
 
 func (p *TsPlugin) GenerateImports(file *generator.FileDescriptor) {
-	
+
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 )
 
+
 type TsPlugin struct {
 	*generator.Generator
 	imports map[generator.GoPackageName]generator.GoImportPath

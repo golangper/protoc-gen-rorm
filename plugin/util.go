@@ -75,6 +75,7 @@ func checkStrIsInt(str string) bool {
 	return b
 }
 
+
 var unneededImports = []string{
 	"import proto \"github.com/gogo/protobuf/proto\"\n",
 	"import _ \"github.com/golangper/protoc-gen-rorm/options\"\n",
