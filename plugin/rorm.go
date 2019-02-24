@@ -811,9 +811,9 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 			p.P(`err = tx.Begin()`)
 			p.dealErrReturn(mname + "[tx.Begin]:")
 			for _, o := range opt.GetSqlxTran() {
-				str := strings.Replace(o.GetParam(), `'`, `"`, -1)
-				strArry := strings.Split(str, ";")
-				str1 := strings.TrimSpace(strArry[0])
+				//str := strings.Replace(o.GetParam(), `'`, `"`, -1)
+				strArry := strings.Split(o.GetParam(), ";")
+				str1 :=`"` + strings.TrimSpace(strArry[0]) + `"`
 				str2 := " "
 				for _, s := range strArry[1:] {
 					str2 += ","

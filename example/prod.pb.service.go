@@ -3,15 +3,15 @@
 
 package example
 
-import http "net/http"
-import log "log"
-import snowflake "github.com/fainted/snowflake"
-import grpc "google.golang.org/grpc"
 import xorm "github.com/go-xorm/xorm"
+import http "net/http"
+import gin "github.com/gin-gonic/gin"
 import context "golang.org/x/net/context"
 import roundrobin "google.golang.org/grpc/balancer/roundrobin"
+import snowflake "github.com/fainted/snowflake"
 import json "encoding/json"
-import gin "github.com/gin-gonic/gin"
+import grpc "google.golang.org/grpc"
+import log "log"
 
 
 
@@ -62,14 +62,14 @@ func (s *_ProductImp) SetProd(c context.Context, in *Prod) (*Empty, error) {
 		log.Println("SetProd[tx.Begin]:", err.Error())
 		return out, err
 	}
-	_, err = s.db.Exec(insert into prod (id,name,details) values (?,?,?) ,uid,in.Name,in.Details)
+	_, err = s.db.Exec("insert into prod (id,name,details) values (?,?,?)" ,uid,in.Name,in.Details)
 	if err != nil {
 		tx.Rollback()
 		log.Println("SetProd[s.db.Exec] :", err.Error())
 		return out, err
 	}
 	for _, obj := range in.Skus{
-		_, err = s.db.Exec(insert into sku (sku_id,price,bn,weight,prod_id) values (?,?,?,?,?) ,obj.SkuId,obj.Price,obj.Bn,obj.Weight,in.Id)
+		_, err = s.db.Exec("insert into sku (sku_id,price,bn,weight,prod_id) values (?,?,?,?,?)" ,obj.SkuId,obj.Price,obj.Bn,obj.Weight,in.Id)
 		if err != nil {
 			tx.Rollback()
 			log.Println("SetProd[s.db.Exec] :", err.Error())
