@@ -34,7 +34,7 @@ service product {
     rpc getProd(ProdId) returns (Prod){
         option (rorm.opts) = {
             target: "out";
-            method: "xorm.Get";
+            method: "xorm.SQLGet";
             param: "select * from prod where id = ?;in.id";
             success: {
                 target: "out.skus";

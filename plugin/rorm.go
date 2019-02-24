@@ -349,6 +349,7 @@ func (p *RormPlugin) dealMethods(opts *options.RormOptions, in, out, mname strin
 }
 
 func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in, out, mname string) error {
+	//fmt.Println(opt)
 	var err error
 	if opt.GetParam() == "" && opt.GetSqlxTran() == nil {
 		return fmt.Errorf("param can not bu null")
@@ -820,6 +821,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 				}
 				_, lb1, _, err := p.getVarType(o.GetSlice(), in, out)
 				if err != nil {
+					fmt.Println(err)
 					return err
 				}
 				if o.Method == "xorm.Exec" {
@@ -849,6 +851,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 					}
 
 				} else {
+					fmt.Println("Does not support functions: %s", opt.GetMethod())
 					err = fmt.Errorf("Does not support functions: %s", opt.GetMethod())
 				}
 			}
@@ -856,6 +859,7 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 		} else if opt.GetMzset() != nil {
 
 		} else {
+			fmt.Println("Does not support functions: %s", opt.GetMethod())
 			err = fmt.Errorf("Does not support functions: %s", opt.GetMethod())
 		}
 	}

@@ -3,15 +3,15 @@
 
 package example
 
-import grpc "google.golang.org/grpc"
-import gin "github.com/gin-gonic/gin"
+import http "net/http"
 import log "log"
+import snowflake "github.com/fainted/snowflake"
+import grpc "google.golang.org/grpc"
+import xorm "github.com/go-xorm/xorm"
 import context "golang.org/x/net/context"
 import roundrobin "google.golang.org/grpc/balancer/roundrobin"
 import json "encoding/json"
-import xorm "github.com/go-xorm/xorm"
-import http "net/http"
-import snowflake "github.com/fainted/snowflake"
+import gin "github.com/gin-gonic/gin"
 
 
 
@@ -27,6 +27,11 @@ func (s *_ProductImp) GetProd(c context.Context, in *ProdId) (*Prod, error) {
 	out := &Prod{}
 	err = in.Validate()
 	if err != nil {
+		return out, err
+	}
+	_, err = s.db.SQL("select * from prod where id = ?" ,in.Id).Get(out)
+	if err != nil {
+		log.Println("GetProd[s.db.SQL-Get]:", err.Error())
 		return out, err
 	}
 	err = s.db.SQL("select * from sku where prod_id=?" ,in.Id).Find(&out.Skus)
