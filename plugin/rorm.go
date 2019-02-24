@@ -920,7 +920,7 @@ func (p *RormPlugin) getString(str, in, out string) (string, error) {
 	ss := strings.Split(s, "+")
 	res := ""
 	for _, st := range ss {
-		if strings.Contains(st, `"`) {
+		if !strings.Contains(st, `in.`) {
 			if res != "" {
 				res += " + "
 			}
