@@ -355,16 +355,16 @@ func (p *RormPlugin) dealMethod(opt *options.RormOptions, end bool, els bool, in
 	}
 	param := strings.Replace(opt.GetParam(), "\n", "", -1)
 
-	str := strings.Replace(param, `'`, `"`, -1)
+	//str := strings.Replace(param, `'`, `"`, -1)
 
-	strArry := strings.Split(str, ";")
-	str1 := strings.TrimSpace(strArry[0])
+	strArry := strings.Split(param, ";")
+	str1 := `"` + strings.TrimSpace(strArry[0]) + `"`;
 	str2 := " "
 	for _, s := range strArry[1:] {
 		str2 += ","
 		str2 += CamelField(strings.TrimSpace(s))
 	}
-	str = strings.Replace(str, `;`, `,`, -1)
+	//str = strings.Replace(param, `;`, `,`, -1)
 	//var tp descriptor.FieldDescriptorProto_Type
 	tp, lb, sl, err := p.getVarType(opt.GetTarget(), in, out)
 	if err != nil {
