@@ -2,8 +2,9 @@ syntax = "proto3";
 package example;
 
 import "github.com/golangper/protoc-gen-rorm/options/rorm.proto";
+import "github.com/lyft/protoc-gen-validate/validate/validate.proto";
 // import "github.com/golangper/protoc-gen-rorm/example/user.proto";
-import "user.proto";
+// import "user.proto";
 
 message Prod {
     int64 id = 1;
@@ -33,12 +34,12 @@ service product {
     rpc getProd(ProdId) returns (Prod){
         option (rorm.opts) = {
             target: "out";
-            method: "sqlx.Get";
-            param: "'select * from prod where id = ?';in.id";
+            method: "xorm.Get";
+            param: "select * from prod where id = ?;in.id";
             success: {
                 target: "out.skus";
-                method: "sqlx.Select";
-                param: "'select * from sku where prod_id=?';in.id"
+                method: "xorm.SQLFind";
+                param: "select * from sku where prod_id=?;in.id"
             }
         };
         option (rorm.api) = {
@@ -54,13 +55,13 @@ service product {
         option (rorm.opts) = {
             sqlx_tran: [{
                 target: "out";
-                method: "sqlx.Exec";
-                param: "'insert into prod (id,name,details) values (?,?,?)';uid;in.name;in.details"
+                method: "xorm.Exec";
+                param: "insert into prod (id,name,details) values (?,?,?);uid;in.name;in.details"
             },{
                 target: "out";
-                method: "sqlx.Exec";
+                method: "xorm.Exec";
                 slice: "in.skus";
-                param: "'insert into sku (sku_id,price,bn,weight,prod_id) values (?,?,?,?,?)';obj.sku_id;obj.price;obj.bn;obj.weight;in.id"
+                param: "insert into sku (sku_id,price,bn,weight,prod_id) values (?,?,?,?,?);obj.sku_id;obj.price;obj.bn;obj.weight;in.id"
             }]
         };
          option (rorm.api) = {
