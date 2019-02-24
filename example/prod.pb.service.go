@@ -3,15 +3,15 @@
 
 package example
 
+import context "golang.org/x/net/context"
+import snowflake "github.com/fainted/snowflake"
+import log "log"
+import grpc "google.golang.org/grpc"
 import xorm "github.com/go-xorm/xorm"
 import http "net/http"
 import gin "github.com/gin-gonic/gin"
-import context "golang.org/x/net/context"
 import roundrobin "google.golang.org/grpc/balancer/roundrobin"
-import snowflake "github.com/fainted/snowflake"
 import json "encoding/json"
-import grpc "google.golang.org/grpc"
-import log "log"
 
 
 
@@ -140,4 +140,69 @@ func (s *ProductImp) NewBalancerClient(target string) ProductClient {
 		log.Fatalln(err)
 	}
 	return NewProductClient(conn)
+}
+type _Product2Imp struct {
+	db *xorm.Engine
+}
+
+func (s *_Product2Imp) GetProd(c context.Context, in *ProdId) (*Prod, error) {
+	var err error
+	out := &Prod{}
+	err = in.Validate()
+	if err != nil {
+		return out, err
+	}
+	_, err = s.db.SQL("select * from prod where id = ?" ,in.Id).Get(out)
+	if err != nil {
+		log.Println("GetProd[s.db.SQL-Get]:", err.Error())
+		return out, err
+	}
+	err = s.db.SQL("select * from sku where prod_id=?" ,in.Id).Find(&out.Skus)
+	if err != nil {
+		log.Println("GetProd[s.db.SQL-Find]:", err.Error())
+		return out, err
+	}
+	return out, nil
+}
+
+type Product2Imp struct {
+	_Product2Imp
+}
+
+func NewProduct2Imp(db *xorm.Engine, ) Product2Imp {
+	res := Product2Imp{}
+	res.db = db
+	return res
+}
+
+
+func (s *Product2Imp) GetProdHandler(c *gin.Context) {
+	prm := &ProdId{}
+	var err error
+	err = c.ShouldBind(prm)
+	if err != nil {
+		log.Println("GetProdHandler[c.ShouldBind] :", err.Error())
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
+	res, err := s.GetProd(context.Background(), prm)
+	if err != nil {
+		log.Println("GetProdHandler[s.GetProd] :", err.Error())
+		c.String(http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	r,_:=json.Marshal(res)
+	c.String(http.StatusOK,string(r))
+}
+
+func (s *Product2Imp) InitApi(g *gin.RouterGroup) {
+	g.GET("/v1/prod/getProd", s.GetProdHandler)
+}
+
+func (s *Product2Imp) NewBalancerClient(target string) Product2Client {
+	conn, err := grpc.Dial(target,grpc.WithInsecure(),grpc.WithBalancerName(roundrobin.Name))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return NewProduct2Client(conn)
 }

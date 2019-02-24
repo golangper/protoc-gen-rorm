@@ -45,3 +45,13 @@ export class ProductService {
     return this.http.post<{}>(this.url + '/v1/prod/setProd', param, httpOptions);
   }
 }
+@Injectable()
+export class Product2Service {
+  url = 'https://myfoodie.com';
+  constructor(private http: HttpClient) { }
+  getProd(param: ProdId): Observable<Prod> {
+    const params = new HttpParams();
+    params.set('id', '' + param.id);
+    return this.http.get<Prod>(this.url + '/v1/prod/getProd', {params: params});
+  }
+}

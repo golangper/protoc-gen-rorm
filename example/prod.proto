@@ -70,3 +70,28 @@ service product {
         };
     };
 }
+
+service product2 {
+    option (rorm.xorm_type) = 1 ;
+    option (rorm.gin_handler) = true ;
+    option (rorm.api_cfg) = {
+        url: "https://myfoodie.com";
+        provide: "";
+    };
+    rpc getProd(ProdId) returns (Prod){
+        option (rorm.opts) = {
+            target: "out";
+            method: "xorm.SQLGet";
+            param: "select * from prod where id = ?;in.id";
+            success: {
+                target: "out.skus";
+                method: "xorm.SQLFind";
+                param: "select * from sku where prod_id=?;in.id"
+            }
+        };
+        option (rorm.api) = {
+            method: "get";
+            path: "/v1/prod/getProd"
+        };
+    };
+}
